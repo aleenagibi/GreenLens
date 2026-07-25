@@ -1,0 +1,17 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    APP_NAME: str = "GreenLens"
+    APP_VERSION: str = "1.0.0"
+
+    API_V1_STR: str = "/api/v1"
+
+    DEBUG: bool = True
+
+    DATABASE_URL: str = "sqlite:///./greenlens.db"
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
+
+settings = Settings()
