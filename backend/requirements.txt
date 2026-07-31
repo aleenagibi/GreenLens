@@ -26,9 +26,14 @@ sentence-transformers==5.0.0
 xgboost==3.0.3
 
 # ---------- Utilities ----------
-requests==2.32.4
 loguru==0.7.3
 
 # ---------- Testing ----------
 pytest==8.4.1
 pytest-asyncio==1.1.0
+
+# ---------- HTTP Client ----------
+httpx==0.28.1
+requests==2.32.4
+# ---------- AI Client ----------
+openai>=1.100.0

@@ -1,9 +1,9 @@
 from app.db.database import get_db
 from app.models.provider import Provider
 from app.schemas.provider import ProviderCreate, ProviderResponse
+from app.services import provider_service
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.services import provider_service
 
 router = APIRouter(prefix="/providers", tags=["Providers"])
 
