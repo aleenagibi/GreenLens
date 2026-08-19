@@ -1,26 +1,36 @@
-from app.core.config import settings
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+"""
+Database configuration for GreenLens.
+"""
 
-# Create database engine
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+from app.core.config import settings
+
+
+class Base(DeclarativeBase):
+    """Base class for all database models."""
+
+
 engine = create_engine(
     settings.DATABASE_URL,
-    echo=True
+    connect_args={"check_same_thread": False},
 )
 
-# Create session factory
 SessionLocal = sessionmaker(
-    autocommit=False,
+    bind=engine,
     autoflush=False,
-    bind=engine
+    autocommit=False,
 )
 
-# Base class for all database models
-Base = declarative_base()
 
-# Dependency for database sessions
 def get_db():
+    """
+    Provide a database session for a request.
+    """
+
     db = SessionLocal()
+
     try:
         yield db
     finally:

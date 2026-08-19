@@ -1,5 +1,7 @@
+from app.api.routes.chat import router as chat_router
 from app.api.routes.providers import router as provider_router
 from app.core.config import settings
+from app.db import models
 from app.db.database import Base, engine
 from app.models import provider
 from fastapi import FastAPI
@@ -11,6 +13,8 @@ app = FastAPI(
     description="Agentic Carbon-Aware AI Inference Orchestrator",
 )
 app.include_router(provider_router)
+app.include_router(chat_router)
+
 @app.get("/")
 def root():
     return {

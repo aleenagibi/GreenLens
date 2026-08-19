@@ -7,9 +7,11 @@ using the OpenAI SDK configured for OpenRouter.
 
 from typing import Any
 
+from ecologits import EcoLogits
+from openai import OpenAI
+
 from app.core.config import settings
 from app.providers.base_provider import BaseProvider
-from openai import OpenAI
 
 
 class OpenRouterProvider(BaseProvider):
@@ -19,6 +21,12 @@ class OpenRouterProvider(BaseProvider):
     """
 
     def __init__(self):
+
+        # Initialize EcoLogits once for the OpenAI
+        # SDK instrumentation used by OpenRouter.
+        EcoLogits.init(
+            providers=["openai"]
+        )
 
         self.client = OpenAI(
             base_url=settings.OPENROUTER_BASE_URL,
@@ -61,4 +69,5 @@ class OpenRouterProvider(BaseProvider):
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
             },
+            "impacts": response.impacts,
         }
