@@ -20,8 +20,11 @@ class ModelEvaluationService:
         """
         Evaluate available models for a specific task.
 
-        Only models with verified capability data are
-        returned as capability candidates.
+        Capability source priority:
+
+        1. LiveBench
+        2. Artificial Analysis
+        3. Unavailable
         """
 
         models = (
@@ -37,6 +40,11 @@ class ModelEvaluationService:
             capability = CapabilityEngine.predict(
                 model=model.model_id,
                 task_type=task_type,
+                model_metadata={
+                    "artificial_analysis": (
+                        model.artificial_analysis
+                    ),
+                },
             )
 
             results.append(

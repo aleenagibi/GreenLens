@@ -58,3 +58,32 @@ def test_get_by_id():
 
     assert model is not None
     assert model.display_name == "GPT-OSS 20B"
+
+def test_load_models_preserves_artificial_analysis():
+
+    models = [
+        {
+            "model_id": "openai/gpt-oss-20b:free",
+            "display_name": "GPT-OSS 20B",
+            "is_free": True,
+            "artificial_analysis": {
+                "intelligence_index": 52.6,
+                "coding_index": 68.8,
+                "agentic_index": 45.7,
+            },
+        }
+    ]
+
+    ModelRegistry.load_models(models)
+
+    model = ModelRegistry.get_by_id(
+        "openai/gpt-oss-20b:free"
+    )
+
+    assert model is not None
+
+    assert model.artificial_analysis == {
+        "intelligence_index": 52.6,
+        "coding_index": 68.8,
+        "agentic_index": 45.7,
+    }

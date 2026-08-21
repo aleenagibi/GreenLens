@@ -1,13 +1,22 @@
 """
 Capability Engine
 
-Provides model capability scores using verified
-LiveBench benchmark data.
+Provides model capability scores using verified benchmark data.
+
+Capability source priority:
+
+1. LiveBench
+2. Artificial Analysis
+3. Unavailable
+
+OpenRouter model IDs are normalized before matching
+against LiveBench profiles.
 """
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -30,8 +39,15 @@ class CapabilityResult:
 
 class CapabilityEngine:
     """
-    Looks up model capability for a specific task
-    using the processed LiveBench dataset.
+    Determines model capability using verified benchmark data.
+
+    Priority:
+
+        LiveBench
+            ↓
+        Artificial Analysis
+            ↓
+        Unavailable
     """
 
     _profiles: dict[str, dict] = {}
@@ -47,6 +63,18 @@ class CapabilityEngine:
         "writing": "language",
         "instruction_following": "instruction_following",
         "agentic_coding": "agentic_coding",
+    }
+
+    ARTIFICIAL_ANALYSIS_MAP = {
+        "general": "intelligence_index",
+        "reasoning": "intelligence_index",
+        "coding": "coding_index",
+        "agentic_coding": "agentic_index",
+        "mathematics": "intelligence_index",
+        "data_analysis": "intelligence_index",
+        "language": "intelligence_index",
+        "writing": "intelligence_index",
+        "instruction_following": "intelligence_index",
     }
 
     @classmethod
@@ -88,63 +116,224 @@ class CapabilityEngine:
             if profile.get("model")
         }
 
+    @staticmethod
+    def normalize_model_id(
+        model: str,
+    ) -> str:
+        """
+        Normalize an OpenRouter model ID into the
+        identity format used by LiveBench.
+
+        Examples:
+
+            z-ai/glm-5.2:free
+            -> glm-5.2
+
+            openai/gpt-oss-20b:free
+            -> gpt-oss-20b
+
+            glm-5.2
+            -> glm-5.2
+        """
+
+        normalized = model.strip()
+
+        if "/" in normalized:
+            normalized = normalized.split(
+                "/",
+                1,
+            )[1]
+
+        if normalized.endswith(":free"):
+            normalized = normalized[
+                :-len(":free")
+            ]
+
+        return normalized
+
     @classmethod
     def predict(
         cls,
         model: str,
         task_type: str,
+        model_metadata: dict[str, Any] | None = None,
     ) -> CapabilityResult:
         """
-        Return the LiveBench capability score for
-        a model and task type.
+        Determine capability using the following priority:
+
+        1. LiveBench
+        2. Artificial Analysis
+        3. Unavailable
+
+        The original OpenRouter model ID is preserved
+        in the returned result.
         """
 
+        task_key = task_type.lower()
+
         category = cls.CATEGORY_MAP.get(
-            task_type.lower()
+            task_key
         )
 
         if category is None:
-            return CapabilityResult(
-                model=model,
-                task_type=task_type,
-                score=None,
-                source="unavailable",
-                available=False,
+            return cls._unavailable_result(
+                model,
+                task_type,
             )
 
-        profile = cls._profiles.get(model)
+        normalized_model = (
+            cls.normalize_model_id(model)
+        )
 
-        if profile is None:
-            return CapabilityResult(
-                model=model,
-                task_type=task_type,
-                score=None,
-                source="unavailable",
-                available=False,
+        # ==================================================
+        # 1. PRIMARY SOURCE: LIVEBENCH
+        # ==================================================
+
+        profile = cls._profiles.get(
+            normalized_model
+        )
+
+        if profile is not None:
+
+            score = profile.get(category)
+
+            if score is not None:
+
+                normalized_score = round(
+                    float(score) / 10,
+                    2,
+                )
+
+                return CapabilityResult(
+                    model=model,
+                    task_type=task_type,
+                    score=normalized_score,
+                    source="LiveBench",
+                    available=True,
+                )
+
+        # ==================================================
+        # 2. FALLBACK: ARTIFICIAL ANALYSIS
+        # ==================================================
+
+        if model_metadata is not None:
+
+            artificial_analysis = (
+                model_metadata.get(
+                    "artificial_analysis"
+                )
             )
 
-        score = profile.get(category)
-
-        if score is None:
-            return CapabilityResult(
-                model=model,
-                task_type=task_type,
-                score=None,
-                source="unavailable",
-                available=False,
+            aa_score = (
+                cls._get_artificial_analysis_score(
+                    artificial_analysis,
+                    task_key,
+                )
             )
 
-        # LiveBench is 0–100.
-        # GreenLens uses 0–10.
-        normalized_score = round(
-            float(score) / 10,
+            if aa_score is not None:
+
+                return CapabilityResult(
+                    model=model,
+                    task_type=task_type,
+                    score=aa_score,
+                    source="ArtificialAnalysis",
+                    available=True,
+                )
+
+        # ==================================================
+        # 3. NO VERIFIED DATA
+        # ==================================================
+
+        return cls._unavailable_result(
+            model,
+            task_type,
+        )
+
+    @classmethod
+    def _get_artificial_analysis_score(
+        cls,
+        artificial_analysis: Any,
+        task_type: str,
+    ) -> float | None:
+        """
+        Extract an Artificial Analysis capability score.
+
+        Artificial Analysis indices are represented on a
+        0–100 scale. GreenLens normalizes them to 0–10.
+
+        Task mapping:
+
+            general/reasoning/etc.
+                -> intelligence_index
+
+            coding
+                -> coding_index
+
+            agentic_coding
+                -> agentic_index
+        """
+
+        if not isinstance(
+            artificial_analysis,
+            dict,
+        ):
+            return None
+
+        field = cls.ARTIFICIAL_ANALYSIS_MAP.get(
+            task_type
+        )
+
+        if field is None:
+            return None
+
+        value = artificial_analysis.get(
+            field
+        )
+
+        if value is None:
+            return None
+
+        try:
+            value = float(value)
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return None
+
+        if value < 0:
+            return None
+
+        # Artificial Analysis indices are expressed
+        # on a 0–100 scale.
+        normalized_score = value / 10
+
+        return round(
+            max(
+                0.0,
+                min(
+                    10.0,
+                    normalized_score,
+                ),
+            ),
             2,
         )
+
+    @staticmethod
+    def _unavailable_result(
+        model: str,
+        task_type: str,
+    ) -> CapabilityResult:
+        """
+        Return a capability result when no verified
+        benchmark information is available.
+        """
 
         return CapabilityResult(
             model=model,
             task_type=task_type,
-            score=normalized_score,
-            source="LiveBench",
-            available=True,
+            score=None,
+            source="unavailable",
+            available=False,
         )

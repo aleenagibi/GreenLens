@@ -5,6 +5,7 @@ Central registry for individual AI models.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class ModelInfo:
     display_name: str
     is_free: bool
     capability_score: float | None = None
+    artificial_analysis: dict[str, Any] | None = None
 
 
 class ModelRegistry:
@@ -40,7 +42,10 @@ class ModelRegistry:
 
             # OpenRouter model IDs normally look like:
             # provider/model-name
-            provider = model_id.split("/", 1)[0]
+            provider = model_id.split(
+                "/",
+                1,
+            )[0]
 
             cls._models[model_id] = ModelInfo(
                 model_id=model_id,
@@ -54,6 +59,9 @@ class ModelRegistry:
                     False,
                 ),
                 capability_score=None,
+                artificial_analysis=model.get(
+                    "artificial_analysis"
+                ),
             )
 
     @classmethod

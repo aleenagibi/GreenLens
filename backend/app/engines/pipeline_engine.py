@@ -57,6 +57,7 @@ class PipelineEngine:
             capability = CapabilityEngine.predict(
                 model=model_id,
                 task_type=task_type,
+                model_metadata=model,
             )
 
             # Use the verified LiveBench score when
