@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 from app.engines.capability_engine import (
     CapabilityEngine,
@@ -48,10 +49,16 @@ def test_unknown_model():
 
     CapabilityEngine._profiles = {}
 
-    result = CapabilityEngine.predict(
-        "unknown-model",
-        "coding",
-    )
+    with patch(
+        "app.engines.capability_engine.ArtificialAnalysisProvider"
+    ) as mock_provider:
+
+        mock_provider.return_value.get_benchmark.return_value = None
+
+        result = CapabilityEngine.predict(
+            "unknown-model",
+            "coding",
+        )
 
     assert result.available is False
     assert result.score is None
@@ -59,6 +66,8 @@ def test_unknown_model():
 
 
 def test_unknown_task():
+
+    CapabilityEngine._profiles = {}
 
     result = CapabilityEngine.predict(
         "test-model",
@@ -220,18 +229,22 @@ def test_no_livebench_or_artificial_analysis():
 
     CapabilityEngine._profiles = {}
 
-    result = CapabilityEngine.predict(
-        "openai/gpt-oss-20b:free",
-        "general",
-        model_metadata={
-            "artificial_analysis": None
-        },
-    )
+    with patch(
+        "app.engines.capability_engine.ArtificialAnalysisProvider"
+    ) as mock_provider:
+
+        mock_provider.return_value.get_benchmark.return_value = None
+
+        result = CapabilityEngine.predict(
+            "openai/gpt-oss-20b:free",
+            "general",
+            model_metadata={
+                "artificial_analysis": None
+            },
+        )
 
     assert result.available is False
-
     assert result.score is None
-
     assert result.source == "unavailable"
 
 
@@ -245,14 +258,18 @@ def test_artificial_analysis_missing_field():
         }
     }
 
-    result = CapabilityEngine.predict(
-        "openai/gpt-oss-20b:free",
-        "general",
-        model_metadata=metadata,
-    )
+    with patch(
+        "app.engines.capability_engine.ArtificialAnalysisProvider"
+    ) as mock_provider:
+
+        mock_provider.return_value.get_benchmark.return_value = None
+
+        result = CapabilityEngine.predict(
+            "openai/gpt-oss-20b:free",
+            "general",
+            model_metadata=metadata,
+        )
 
     assert result.available is False
-
     assert result.score is None
-
     assert result.source == "unavailable"

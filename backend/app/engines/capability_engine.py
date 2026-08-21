@@ -18,6 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.benchmarks.artificial_analysis_provider import (
+    ArtificialAnalysisProvider,
+)
+
 
 @dataclass(frozen=True)
 class CapabilityResult:
@@ -65,18 +69,6 @@ class CapabilityEngine:
         "agentic_coding": "agentic_coding",
     }
 
-    ARTIFICIAL_ANALYSIS_MAP = {
-        "general": "intelligence_index",
-        "reasoning": "intelligence_index",
-        "coding": "coding_index",
-        "agentic_coding": "agentic_index",
-        "mathematics": "intelligence_index",
-        "data_analysis": "intelligence_index",
-        "language": "intelligence_index",
-        "writing": "intelligence_index",
-        "instruction_following": "intelligence_index",
-    }
-
     @classmethod
     def load_profiles(
         cls,
@@ -87,7 +79,10 @@ class CapabilityEngine:
         """
 
         if file_path is None:
-            base_dir = Path(__file__).resolve().parents[2]
+
+            base_dir = (
+                Path(__file__).resolve().parents[2]
+            )
 
             file_path = str(
                 base_dir
@@ -100,6 +95,7 @@ class CapabilityEngine:
         path = Path(file_path)
 
         if not path.exists():
+
             raise FileNotFoundError(
                 f"Capability profiles not found: {path}"
             )
@@ -108,6 +104,7 @@ class CapabilityEngine:
             "r",
             encoding="utf-8",
         ) as file:
+
             profiles = json.load(file)
 
         cls._profiles = {
@@ -121,8 +118,7 @@ class CapabilityEngine:
         model: str,
     ) -> str:
         """
-        Normalize an OpenRouter model ID into the
-        identity format used by LiveBench.
+        Normalize an OpenRouter model ID.
 
         Examples:
 
@@ -139,12 +135,14 @@ class CapabilityEngine:
         normalized = model.strip()
 
         if "/" in normalized:
+
             normalized = normalized.split(
                 "/",
                 1,
             )[1]
 
         if normalized.endswith(":free"):
+
             normalized = normalized[
                 :-len(":free")
             ]
@@ -159,14 +157,18 @@ class CapabilityEngine:
         model_metadata: dict[str, Any] | None = None,
     ) -> CapabilityResult:
         """
-        Determine capability using the following priority:
+        Determine capability using:
 
         1. LiveBench
         2. Artificial Analysis
         3. Unavailable
 
-        The original OpenRouter model ID is preserved
-        in the returned result.
+        LiveBench is checked first.
+
+        If LiveBench has no data, Artificial Analysis
+        is queried dynamically.
+
+        The original OpenRouter model ID is preserved.
         """
 
         task_key = task_type.lower()
@@ -176,6 +178,7 @@ class CapabilityEngine:
         )
 
         if category is None:
+
             return cls._unavailable_result(
                 model,
                 task_type,
@@ -216,6 +219,12 @@ class CapabilityEngine:
         # 2. FALLBACK: ARTIFICIAL ANALYSIS
         # ==================================================
 
+        # First check whether the model catalogue already
+        # contains Artificial Analysis data.
+        #
+        # This preserves your existing functionality and
+        # avoids an unnecessary API request when data is
+        # already available.
         if model_metadata is not None:
 
             artificial_analysis = (
@@ -224,22 +233,41 @@ class CapabilityEngine:
                 )
             )
 
-            aa_score = (
+            cached_score = (
                 cls._get_artificial_analysis_score(
                     artificial_analysis,
                     task_key,
                 )
             )
 
-            if aa_score is not None:
+            if cached_score is not None:
 
                 return CapabilityResult(
                     model=model,
                     task_type=task_type,
-                    score=aa_score,
+                    score=cached_score,
                     source="ArtificialAnalysis",
                     available=True,
                 )
+
+        # If the catalogue does not contain AA data,
+        # query the dynamic Artificial Analysis provider.
+        provider = ArtificialAnalysisProvider()
+
+        benchmark = provider.get_benchmark(
+            model=model,
+            task_type=task_type,
+        )
+
+        if benchmark is not None:
+
+            return CapabilityResult(
+                model=model,
+                task_type=task_type,
+                score=benchmark.score,
+                source=benchmark.source,
+                available=benchmark.verified,
+            )
 
         # ==================================================
         # 3. NO VERIFIED DATA
@@ -250,41 +278,47 @@ class CapabilityEngine:
             task_type,
         )
 
-    @classmethod
+    @staticmethod
     def _get_artificial_analysis_score(
-        cls,
         artificial_analysis: Any,
         task_type: str,
     ) -> float | None:
         """
-        Extract an Artificial Analysis capability score.
+        Extract an Artificial Analysis capability score
+        from already available model metadata.
 
         Artificial Analysis indices are represented on a
-        0–100 scale. GreenLens normalizes them to 0–10.
-
-        Task mapping:
-
-            general/reasoning/etc.
-                -> intelligence_index
-
-            coding
-                -> coding_index
-
-            agentic_coding
-                -> agentic_index
+        0–100 scale and GreenLens uses 0–10.
         """
 
         if not isinstance(
             artificial_analysis,
             dict,
         ):
+
             return None
 
-        field = cls.ARTIFICIAL_ANALYSIS_MAP.get(
+        field_map = {
+            "general": "intelligence_index",
+            "reasoning": "intelligence_index",
+            "coding": "coding_index",
+            "agentic_coding": "agentic_index",
+            "mathematics": "intelligence_index",
+            "math": "intelligence_index",
+            "data_analysis": "intelligence_index",
+            "language": "intelligence_index",
+            "writing": "intelligence_index",
+            "instruction_following": (
+                "intelligence_index"
+            ),
+        }
+
+        field = field_map.get(
             task_type
         )
 
         if field is None:
+
             return None
 
         value = artificial_analysis.get(
@@ -292,21 +326,24 @@ class CapabilityEngine:
         )
 
         if value is None:
+
             return None
 
         try:
+
             value = float(value)
+
         except (
             TypeError,
             ValueError,
         ):
+
             return None
 
         if value < 0:
+
             return None
 
-        # Artificial Analysis indices are expressed
-        # on a 0–100 scale.
         normalized_score = value / 10
 
         return round(

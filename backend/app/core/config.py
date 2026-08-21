@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
 
+    ARTIFICIAL_ANALYSIS_API_KEY: str | None = None
+    
+
     DEFAULT_PROVIDER: str = "OpenRouter"
     # DEFAULT_MODEL: str = "google/gemma-4-31b-it:free"
     DEFAULT_MODEL: str = "openai/gpt-oss-20b:free"

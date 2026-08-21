@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from app.engines.capability_engine import CapabilityEngine
 from app.engines.pipeline_engine import PipelineEngine
 
@@ -40,3 +42,43 @@ def test_pipeline():
         result["task"]["embedding_dimensions"]
         == 384
     )
+
+
+def test_pipeline_without_capability_data():
+
+    CapabilityEngine._profiles = {}
+
+    pipeline = PipelineEngine()
+
+    models = [
+        {
+            "model": "test/unknown-model",
+            "estimated_tokens": 500,
+            "latency_score": 8.0,
+        }
+    ]
+
+    with patch(
+        "app.engines.capability_engine.ArtificialAnalysisProvider"
+    ) as mock_provider:
+
+        mock_provider.return_value.get_benchmark.return_value = None
+
+        result = pipeline.run(
+            prompt="Write a Python program to sort a list.",
+            models=models,
+        )
+
+    assert "task" in result
+    assert "selection" in result
+    assert "explanation" in result
+
+    assert (
+        result["selection"]["selected_model"]
+        == "test/unknown-model"
+    )
+
+    assert result["selection"]["score"] >= 0.0
+    assert result["selection"]["score"] <= 10.0
+
+    assert result["explanation"]

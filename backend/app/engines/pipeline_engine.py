@@ -68,11 +68,7 @@ class PipelineEngine:
             # prototype so the optimization stage
             # can continue without pretending that
             # the score came from LiveBench.
-            capability_score = (
-                capability.score
-                if capability.available
-                else 5.0
-            )
+            capability_score = capability.score
 
             # Stage 5: Carbon Prediction
             carbon = CarbonEngine.estimate(
