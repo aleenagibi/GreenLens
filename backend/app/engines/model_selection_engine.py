@@ -2,9 +2,12 @@
 Model Selection Engine
 
 Selects:
-1. The ideal model based on capability.
-2. The best free alternative based on capability.
-3. Supports the existing Level-1 candidate-based pipeline.
+1. The ideal model based on the GreenLens
+   optimization score.
+2. The closest suitable free alternative
+   when the ideal model is paid.
+3. Uses verified capability when available
+   without inventing unavailable evidence.
 """
 
 from app.services.model_evaluation_service import (
@@ -52,7 +55,7 @@ class ModelSelectionEngine:
     ) -> dict:
         """
         Select the free model with the closest
-        capability to the ideal model.
+        verified capability to the ideal model.
         """
 
         candidates = (
@@ -97,7 +100,7 @@ class ModelSelectionEngine:
         task_type: str,
     ) -> dict:
         """
-        New model-selection flow.
+        Capability-based model selection.
 
         Finds the ideal model and, if necessary,
         the closest capable free alternative.
@@ -133,34 +136,155 @@ class ModelSelectionEngine:
         cls,
         candidates: list[dict],
     ) -> dict:
-        """
-        Compatibility method for the existing
-        Level-1 PipelineEngine.
-
-        Selects the highest-scoring candidate.
-        """
-
         if not candidates:
-            raise ValueError(
-                "No model candidates available."
-            )
+            raise ValueError("No model candidates available.")
 
-        selected = max(
+        # --------------------------------------------------
+        # 1. Ideal model = highest GreenLens optimization score
+        # --------------------------------------------------
+
+        ideal = max(
             candidates,
-            key=lambda candidate: candidate[
-                "score"
-            ],
+            key=lambda candidate: candidate["score"],
         )
 
-        return {
-            "ideal_model": selected["model"],
-            "selected_model": selected["model"],
-            "capability_gap": 0.0,
-            "score": selected["score"],
-            "reason": (
-                f"{selected['model']} was selected "
-                f"because it achieved the highest "
-                f"overall score of "
+        # --------------------------------------------------
+        # 2. Select the actual free model
+        # --------------------------------------------------
+
+        if ideal.get("is_free", False):
+            selected = ideal
+
+        else:
+            free_candidates = [
+                candidate
+                for candidate in candidates
+                if candidate.get("is_free", False)
+            ]
+
+            if not free_candidates:
+                raise ValueError(
+                    "Ideal model is paid and no free model is available."
+                )
+
+            ideal_capability = ideal.get("capability_score")
+
+            capable_free_candidates = [
+                candidate
+                for candidate in free_candidates
+                if candidate.get("capability_score") is not None
+            ]
+
+            # --------------------------------------------------
+            # Capability-aware paid -> free substitution
+            # --------------------------------------------------
+
+            if (
+                ideal_capability is not None
+                and capable_free_candidates
+            ):
+                suitable = [
+                    candidate
+                    for candidate in capable_free_candidates
+                    if candidate["capability_score"] <= ideal_capability
+                ]
+
+                if suitable:
+                    selected = max(
+                        suitable,
+                        key=lambda candidate: candidate["capability_score"],
+                    )
+                else:
+                    selected = min(
+                        capable_free_candidates,
+                        key=lambda candidate: abs(
+                            candidate["capability_score"]
+                            - ideal_capability
+                        ),
+                    )
+
+                selection_basis = "capability_verified"
+
+            # --------------------------------------------------
+            # Capability unavailable -> do NOT pretend we know
+            # the capability gap.
+            # --------------------------------------------------
+
+            else:
+                selected = max(
+                    free_candidates,
+                    key=lambda candidate: candidate["score"],
+                )
+
+                selection_basis = "greenlens_score_fallback"
+
+        # --------------------------------------------------
+        # 3. Capability gap
+        # --------------------------------------------------
+
+        ideal_capability = ideal.get("capability_score")
+        selected_capability = selected.get("capability_score")
+
+        if (
+            ideal_capability is not None
+            and selected_capability is not None
+        ):
+            capability_gap = round(
+                ideal_capability - selected_capability,
+                2,
+            )
+        else:
+            capability_gap = None
+
+        # --------------------------------------------------
+        # 4. Explain the actual selection basis
+        # --------------------------------------------------
+
+        if ideal["model"] == selected["model"]:
+
+            reason = (
+                f"{selected['model']} was selected because it achieved "
+                f"the highest GreenLens optimization score of "
                 f"{selected['score']:.2f}/10."
+            )
+
+        elif selection_basis == "capability_verified":
+
+            reason = (
+                f"{ideal['model']} achieved the highest GreenLens "
+                f"optimization score of {ideal['score']:.2f}/10 but "
+                f"is paid. {selected['model']} was selected as the "
+                f"closest suitable free alternative based on verified "
+                f"capability."
+            )
+
+        else:
+
+            reason = (
+                f"{ideal['model']} achieved the highest GreenLens "
+                f"optimization score of {ideal['score']:.2f}/10 but "
+                f"is paid. Verified capability data was unavailable "
+                f"for the required comparison, so GreenLens selected "
+                f"{selected['model']} as the highest-scoring free "
+                f"alternative."
+            )
+
+        return {
+            "ideal_model": ideal["model"],
+            "selected_model": selected["model"],
+            "ideal_is_free": ideal.get("is_free", False),
+            "selected_is_free": selected.get("is_free", False),
+
+            # None means "not measurable", NOT zero gap.
+            "capability_gap": capability_gap,
+
+            "capability_available": (
+                ideal_capability is not None
+                and selected_capability is not None
             ),
+
+            "selection_basis": selection_basis,
+
+            "score": selected["score"],
+            "reason": reason,
         }

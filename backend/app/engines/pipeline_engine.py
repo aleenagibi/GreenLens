@@ -5,11 +5,13 @@ Connects the eight stages of the GreenLens pipeline.
 """
 
 from app.engines.capability_engine import CapabilityEngine
-from app.engines.carbon_engine import CarbonEngine
 from app.engines.complexity_engine import ComplexityEngine
 from app.engines.explanation_engine import ExplanationEngine
 from app.engines.model_selection_engine import ModelSelectionEngine
 from app.engines.optimizer_engine import OptimizerEngine
+from app.engines.pre_inference_sustainability_engine import (
+    PreInferenceSustainabilityEngine,
+)
 from app.engines.task_embedding_engine import TaskEmbeddingEngine
 
 
@@ -71,11 +73,20 @@ class PipelineEngine:
             capability_score = capability.score
 
             # Stage 5: Carbon Prediction
-            carbon = CarbonEngine.estimate(
-                total_tokens=model.get(
+            #
+            # Estimate sustainability BEFORE inference.
+            # The estimate is specific to this candidate model
+            # whenever reliable model metadata is available.
+
+            carbon = PreInferenceSustainabilityEngine.estimate(
+                model=model_id,
+                prompt=task_input,
+                complexity_score=complexity.score,
+                estimated_output_tokens=model.get(
                     "estimated_tokens",
                     500,
-                )
+                ),
+                model_metadata=model,
             )
 
             # Level-1 latency estimate
@@ -96,6 +107,10 @@ class PipelineEngine:
             candidates.append(
                 {
                     "model": model_id,
+                    "display_name": model.get("display_name"),
+                    "provider": model.get("provider"),
+                    "prompt_price": model.get("prompt_price"),
+                    "completion_price": model.get("completion_price"),
                     "score": optimization.score,
                     "capability_score": capability_score,
                     "capability_source": capability.source,
@@ -105,6 +120,12 @@ class PipelineEngine:
                     "complexity_score": complexity.score,
                     "energy_wh": carbon.energy_wh,
                     "carbon_g": carbon.carbon_g,
+                    "carbon_source": carbon.source,
+                    "carbon_available": carbon.available,
+                    "is_free": model.get(
+                        "is_free",
+                        False,
+                    ),
                 }
             )
 

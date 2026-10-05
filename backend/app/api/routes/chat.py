@@ -4,7 +4,7 @@ Chat API Routes
 
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.chat_service import ChatService
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 router = APIRouter(
     prefix="/chat",
@@ -20,8 +20,17 @@ service = ChatService()
 )
 def chat(request: ChatRequest):
 
-    response = service.generate_response(
-        prompt=request.prompt,
-    )
+    try:
+        response = service.generate_response(
+            prompt=request.prompt,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "CHAT_REQUEST_FAILED",
+                "message": str(exc),
+            },
+        ) from exc
 
     return response

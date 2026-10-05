@@ -53,13 +53,26 @@ class OpenRouterProvider(BaseProvider):
                 }
             ],
             temperature=temperature,
-            max_tokens=max_tokens,
+            
             extra_headers={
                 "HTTP-Referer": "http://localhost:8000",
                 "X-Title": settings.APP_NAME,
             },
         )
 
+
+        if not response.choices:
+            raise RuntimeError("OpenRouter returned no choices.")
+
+        message = response.choices[0].message
+
+        if message.content is None:
+            raise RuntimeError(
+                f"OpenRouter returned no text content. "
+                f"model={response.model}, "
+                f"finish_reason={response.choices[0].finish_reason}, "
+                f"message={message}"
+            )
         return {
             "provider": "OpenRouter",
             "model": response.model,

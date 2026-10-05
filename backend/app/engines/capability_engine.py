@@ -55,7 +55,9 @@ class CapabilityEngine:
     """
 
     _profiles: dict[str, dict] = {}
-
+    _artificial_analysis_provider = (
+        ArtificialAnalysisProvider()
+    )
     CATEGORY_MAP = {
         "general": "overall",
         "reasoning": "reasoning",
@@ -252,11 +254,12 @@ class CapabilityEngine:
 
         # If the catalogue does not contain AA data,
         # query the dynamic Artificial Analysis provider.
-        provider = ArtificialAnalysisProvider()
-
-        benchmark = provider.get_benchmark(
-            model=model,
-            task_type=task_type,
+        benchmark = (
+            cls._artificial_analysis_provider
+            .get_benchmark(
+                model=model,
+                task_type=task_type,
+            )
         )
 
         if benchmark is not None:

@@ -22,6 +22,13 @@ class Settings(BaseSettings):
 
     LOG_LEVEL: str = "INFO"
 
+    # Comma-separated browser origins allowed to call FastAPI.
+    # Keep localhost entries for Vite development; add the deployed
+    # frontend origin later through the Hugging Face Space secret/env.
+    FRONTEND_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True

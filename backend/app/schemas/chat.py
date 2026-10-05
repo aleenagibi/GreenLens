@@ -65,6 +65,39 @@ class SustainabilityInfo(BaseModel):
     green_score: float
 
 
+class ModelComparisonInfo(BaseModel):
+    rank: int
+    model: str
+    display_name: str | None = None
+    provider: str | None = None
+    is_free: bool
+    fit_score: float
+    capability_score: float | None = None
+    capability_source: str
+    carbon_score: float | None = None
+    latency_score: float | None = None
+    complexity_score: float | None = None
+    estimated_energy_wh: float | None = None
+    estimated_carbon_g: float | None = None
+    selected: bool = False
+    ideal: bool = False
+
+
+class RoutingInfo(BaseModel):
+    ideal_model: str
+    ideal_display_name: str | None = None
+    ideal_is_free: bool
+    selected_model: str
+    selected_display_name: str | None = None
+    selected_is_free: bool
+    capability_gap: float | None = None
+    fit_score: float
+    used_free_alternative: bool
+    reason: str
+    summary: str
+    comparison: list[ModelComparisonInfo]
+
+
 class ChatResponse(BaseModel):
     provider: str
     model: str
@@ -74,3 +107,4 @@ class ChatResponse(BaseModel):
     benchmark: BenchmarkInfo
     sustainability: SustainabilityInfo
     pipeline: dict
+    routing: RoutingInfo

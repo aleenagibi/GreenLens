@@ -7,8 +7,8 @@ from app.engines.pipeline_engine import PipelineEngine
 def test_pipeline():
 
     CapabilityEngine._profiles = {
-        "openai/gpt-oss-20b:free": {
-            "model": "openai/gpt-oss-20b:free",
+        "openai/gpt-oss-20b": {
+            "model": "openai/gpt-oss-20b",
             "coding": 90.0,
             "overall": 90.0,
         }
@@ -21,6 +21,7 @@ def test_pipeline():
             "model": "openai/gpt-oss-20b:free",
             "estimated_tokens": 500,
             "latency_score": 8.0,
+            "is_free": True,
         }
     ]
 
@@ -55,6 +56,7 @@ def test_pipeline_without_capability_data():
             "model": "test/unknown-model",
             "estimated_tokens": 500,
             "latency_score": 8.0,
+            "is_free": True,
         }
     ]
 

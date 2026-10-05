@@ -4,12 +4,9 @@ Artificial Analysis Benchmark Provider
 Retrieves current Artificial Analysis language-model
 indices dynamically through the official API.
 
-Supported Artificial Analysis indices:
-    - Intelligence Index
-    - Coding Index
-    - Agentic Index
-
-The API key is read from GreenLens settings.
+The Artificial Analysis catalogue is fetched once and
+cached in memory so individual model lookups do not
+trigger repeated API requests.
 """
 
 from typing import Any
@@ -23,14 +20,6 @@ from app.benchmarks.base_provider import (
 from app.core.config import settings
 
 
-# Sentinel used to distinguish:
-#
-# ArtificialAnalysisProvider()
-#     -> use the API key from settings
-#
-# ArtificialAnalysisProvider(api_key=None)
-#     -> explicitly use NO API key
-#
 _API_KEY_NOT_PROVIDED = object()
 
 
@@ -39,6 +28,8 @@ class ArtificialAnalysisProvider(
 ):
     """
     Dynamic Artificial Analysis benchmark provider.
+
+    The API catalogue is cached and indexed locally.
     """
 
     BASE_URL = (
@@ -86,6 +77,12 @@ class ArtificialAnalysisProvider(
         ),
     }
 
+    # --------------------------------------------------
+    # In-memory cache
+    # --------------------------------------------------
+
+    _models_cache: dict[str, dict[str, Any]] | None = None
+
     def __init__(
         self,
         api_key: str | None | object = _API_KEY_NOT_PROVIDED,
@@ -98,8 +95,6 @@ class ArtificialAnalysisProvider(
 
         If api_key=None is explicitly supplied:
             operate without an API key.
-
-        This distinction is useful for unit testing.
         """
 
         if api_key is _API_KEY_NOT_PROVIDED:
@@ -123,16 +118,10 @@ class ArtificialAnalysisProvider(
         Retrieve Artificial Analysis benchmark
         evidence for a model and task.
 
-        Returns None when:
-            - API key is unavailable
-            - task type is unsupported
-            - model is unavailable
-            - benchmark value is unavailable
-            - API request fails
+        The Artificial Analysis catalogue is fetched
+        only once per application process.
         """
 
-        # No API key means we cannot query
-        # Artificial Analysis.
         if not self.api_key:
             return None
 
@@ -156,15 +145,14 @@ class ArtificialAnalysisProvider(
 
         try:
 
-            models = self.fetch_models()
+            models = self.get_cached_models()
 
         except requests.RequestException:
 
             return None
 
-        model_data = self.find_model(
-            models,
-            normalized_model,
+        model_data = models.get(
+            normalized_model
         )
 
         if model_data is None:
@@ -193,8 +181,6 @@ class ArtificialAnalysisProvider(
 
             return None
 
-        # Artificial Analysis index values are
-        # converted to GreenLens' 0-10 scale.
         normalized_score = round(
             raw_score / 10,
             2,
@@ -209,6 +195,76 @@ class ArtificialAnalysisProvider(
             verified=True,
         )
 
+    def get_cached_models(
+        self,
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Return the cached Artificial Analysis model
+        catalogue.
+
+        The API is called only if the catalogue has
+        not already been loaded.
+        """
+
+        if (
+            ArtificialAnalysisProvider._models_cache
+            is not None
+        ):
+            return (
+                ArtificialAnalysisProvider._models_cache
+            )
+
+        models = self.fetch_models()
+
+        indexed_models: dict[
+            str,
+            dict[str, Any],
+        ] = {}
+
+        for model in models:
+
+            slug = str(
+                model.get(
+                    "slug",
+                    "",
+                )
+            ).lower()
+
+            openrouter_id = str(
+                model.get(
+                    "openrouter_api_id",
+                    "",
+                )
+            ).lower()
+
+            if slug:
+                indexed_models[slug] = model
+
+            if openrouter_id:
+
+                indexed_models[
+                    openrouter_id
+                ] = model
+
+                if "/" in openrouter_id:
+
+                    normalized_openrouter_id = (
+                        openrouter_id.split(
+                            "/",
+                            1,
+                        )[1]
+                    )
+
+                    indexed_models[
+                        normalized_openrouter_id
+                    ] = model
+
+        ArtificialAnalysisProvider._models_cache = (
+            indexed_models
+        )
+
+        return indexed_models
+
     def fetch_models(
         self,
     ) -> list[dict[str, Any]]:
@@ -216,8 +272,8 @@ class ArtificialAnalysisProvider(
         Fetch available language models from
         Artificial Analysis.
 
-        The endpoint is paginated, so all pages
-        are retrieved.
+        This function is called only when the
+        in-memory cache is empty.
         """
 
         if not self.api_key:
@@ -297,7 +353,6 @@ class ArtificialAnalysisProvider(
 
         normalized = model.strip()
 
-        # Remove provider prefix.
         if "/" in normalized:
 
             normalized = normalized.split(
@@ -305,7 +360,6 @@ class ArtificialAnalysisProvider(
                 1,
             )[1]
 
-        # Remove OpenRouter free suffix.
         if normalized.endswith(":free"):
 
             normalized = normalized[
@@ -315,55 +369,12 @@ class ArtificialAnalysisProvider(
         return normalized.lower()
 
     @classmethod
-    def find_model(
-        cls,
-        models: list[dict[str, Any]],
-        normalized_model: str,
-    ) -> dict[str, Any] | None:
+    def clear_cache(cls) -> None:
         """
-        Find an Artificial Analysis model.
+        Clear the in-memory Artificial Analysis
+        catalogue cache.
 
-        Matching is attempted using:
-            1. slug
-            2. openrouter_api_id
+        Useful for testing or forcing a refresh.
         """
 
-        target = (
-            normalized_model
-            .lower()
-        )
-
-        for model in models:
-
-            slug = str(
-                model.get(
-                    "slug",
-                    "",
-                )
-            ).lower()
-
-            if slug == target:
-
-                return model
-
-            openrouter_id = str(
-                model.get(
-                    "openrouter_api_id",
-                    "",
-                )
-            ).lower()
-
-            if openrouter_id == target:
-
-                return model
-
-            if (
-                openrouter_id
-                and openrouter_id.endswith(
-                    f"/{target}"
-                )
-            ):
-
-                return model
-
-        return None
+        cls._models_cache = None

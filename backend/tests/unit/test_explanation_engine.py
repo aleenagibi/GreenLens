@@ -30,5 +30,7 @@ def test_explanation():
     )
 
     assert result.selected_model == "model-b"
-    assert "highest overall score" in result.summary
+    assert "selected" in result.summary
+    assert result.comparison[0]["rank"] == 1
+    assert result.comparison[0]["ideal"] is True
     assert len(result.comparison) == 2

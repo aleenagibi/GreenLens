@@ -155,83 +155,53 @@ class ModelCatalogService:
         ]
 
     @classmethod
-    def get_free_models(
-        cls,
-    ) -> list[dict[str, Any]]:
-        """
-        Return all currently free models.
-        """
-
-        models = cls.get_normalized_models()
-
-        return [
-            model
-            for model in models
-            if model["is_free"]
-        ]
-
-    @classmethod
-    def get_paid_models(
-        cls,
-    ) -> list[dict[str, Any]]:
-        """
-        Return all currently paid models.
-        """
-
-        models = cls.get_normalized_models()
-
-        return [
-            model
-            for model in models
-            if not model["is_free"]
-        ]
-
-    @classmethod
-    def get_text_models(
-        cls,
-    ) -> list[dict[str, Any]]:
-        """
-        Return models capable of accepting text input
-        and producing text output.
-        """
-
-        models = cls.get_normalized_models()
-
-        return [
-            model
-            for model in models
-            if (
-                "text" in model["input_modalities"]
-                and "text" in model["output_modalities"]
-            )
-        ]
-
-    @classmethod
     def get_chat_models(
         cls,
     ) -> list[dict[str, Any]]:
         """
-        Return models suitable for GreenLens text chat.
+        Return normalized OpenRouter models suitable for
+        GreenLens text-based chat inference.
 
-        A chat candidate must:
-        - have a valid model ID
-        - accept text input
-        - produce text output
-        - not be the OpenRouter automatic router
+        GreenLens currently requires:
+            - A valid model ID
+            - Text input support
+            - Text output support
+
+        Models that do not expose usable modality metadata
+        are retained because OpenRouter's catalogue metadata
+        is not guaranteed to contain modalities for every model.
         """
 
-        models = cls.get_text_models()
+        models = cls.get_normalized_models()
 
-        return [
-            model
-            for model in models
-            if (
-                model["model_id"]
-                and model["model_id"]
-                != "openrouter/free"
-            )
-        ]
+        chat_models = []
 
+        for model in models:
+            input_modalities = model.get(
+                "input_modalities",
+                [],
+            ) or []
+
+            output_modalities = model.get(
+                "output_modalities",
+                [],
+            ) or []
+
+            # If modality information is available, require
+            # text capability on both sides.
+            if input_modalities and "text" not in input_modalities:
+                continue
+
+            if output_modalities and "text" not in output_modalities:
+                continue
+
+            if not model.get("model_id"):
+                continue
+
+            chat_models.append(model)
+
+        return chat_models
+    
     @classmethod
     def get_free_models(
         cls,
@@ -273,7 +243,7 @@ class ModelCatalogService:
         GreenLens inference.
         """
 
-        models = cls.get_text_models()
+        models = cls.get_chat_models()
 
         return [
             model
@@ -290,14 +260,13 @@ class ModelCatalogService:
         GreenLens inference.
         """
 
-        models = cls.get_text_models()
+        models = cls.get_chat_models()
 
         return [
             model
             for model in models
             if not model["is_free"]
         ]
-
     @classmethod
     def get_free_chat_models(
         cls,
