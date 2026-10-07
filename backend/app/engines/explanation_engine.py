@@ -77,6 +77,9 @@ class ExplanationEngine:
                     "complexity_score": candidate.get("complexity_score"),
                     "estimated_energy_wh": candidate.get("energy_wh"),
                     "estimated_carbon_g": candidate.get("carbon_g"),
+                    "carbon_source": candidate.get("carbon_source", "unavailable"),
+                    "carbon_available": candidate.get("carbon_available", False),
+                    "capability_available": candidate.get("capability_available", False),
                     "selected": candidate["model"] == selected_model,
                     "ideal": candidate["model"] == ranked[0]["model"],
                 }

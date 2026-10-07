@@ -39,6 +39,27 @@ class OptimizerEngine:
     available objectives.
     """
 
+    PRESET_WEIGHTS = {
+        "balanced": {
+            "capability": 0.40,
+            "carbon": 0.30,
+            "latency": 0.20,
+            "complexity": 0.10,
+        },
+        "quality": {
+            "capability": 0.60,
+            "carbon": 0.20,
+            "latency": 0.10,
+            "complexity": 0.10,
+        },
+        "eco": {
+            "capability": 0.25,
+            "carbon": 0.55,
+            "latency": 0.10,
+            "complexity": 0.10,
+        },
+    }
+
     CAPABILITY_WEIGHT = 0.40
     CARBON_WEIGHT = 0.30
     LATENCY_WEIGHT = 0.20
@@ -52,6 +73,7 @@ class OptimizerEngine:
         carbon_score: float,
         latency_score: float,
         complexity_score: float,
+        preset: str = "balanced",
     ) -> OptimizationResult:
         """
         Calculate the overall model score.
@@ -64,6 +86,14 @@ class OptimizerEngine:
         on a 0–10 scale.
         """
 
+        preset = preset.lower()
+        if preset not in cls.PRESET_WEIGHTS:
+            raise ValueError(
+                f"Unknown optimization preset: {preset}. "
+                f"Expected one of: {', '.join(cls.PRESET_WEIGHTS)}"
+            )
+
+        weights = cls.PRESET_WEIGHTS[preset]
         components = []
 
         if capability_score is not None:
@@ -71,7 +101,7 @@ class OptimizerEngine:
             components.append(
                 (
                     capability_score,
-                    cls.CAPABILITY_WEIGHT,
+                    weights["capability"],
                 )
             )
 
@@ -79,15 +109,15 @@ class OptimizerEngine:
             [
                 (
                     carbon_score,
-                    cls.CARBON_WEIGHT,
+                    weights["carbon"],
                 ),
                 (
                     latency_score,
-                    cls.LATENCY_WEIGHT,
+                    weights["latency"],
                 ),
                 (
                     complexity_score,
-                    cls.COMPLEXITY_WEIGHT,
+                    weights["complexity"],
                 ),
             ]
         )

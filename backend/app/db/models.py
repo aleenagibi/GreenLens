@@ -38,6 +38,34 @@ class InferenceRecord(Base):
         nullable=False,
     )
 
+    ideal_model: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+
+    capability_gap: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+
+    ideal_estimated_carbon_g: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+
+    selected_estimated_carbon_g: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+
+    fallback_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
+    selected_is_free: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
+
+    preset: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="balanced"
+    )
+
     task_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,

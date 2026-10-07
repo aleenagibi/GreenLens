@@ -27,6 +27,7 @@ class PipelineEngine:
         self,
         prompt: str,
         models: list[dict],
+        preset: str = "balanced",
     ) -> dict:
         """
         Run all eight pipeline stages.
@@ -102,6 +103,7 @@ class PipelineEngine:
                 carbon_score=carbon.green_score,
                 latency_score=latency_score,
                 complexity_score=complexity.score,
+                preset=preset,
             )
 
             candidates.append(
@@ -157,6 +159,8 @@ class PipelineEngine:
         Determine the task category for Level 1.
         """
 
+        import re
+
         text = prompt.lower()
 
         coding_keywords = {
@@ -187,22 +191,16 @@ class PipelineEngine:
             "rewrite",
         }
 
-        if any(
-            keyword in text
-            for keyword in coding_keywords
-        ):
+        def contains_keyword(keyword: str) -> bool:
+            return re.search(rf"\b{re.escape(keyword)}\b", text) is not None
+
+        if any(contains_keyword(keyword) for keyword in coding_keywords):
             return "coding"
 
-        if any(
-            keyword in text
-            for keyword in reasoning_keywords
-        ):
+        if any(contains_keyword(keyword) for keyword in reasoning_keywords):
             return "reasoning"
 
-        if any(
-            keyword in text
-            for keyword in writing_keywords
-        ):
+        if any(contains_keyword(keyword) for keyword in writing_keywords):
             return "writing"
 
         return "general"

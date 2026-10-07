@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 
 
+MAX_PROMPT_LENGTH = None
+
+
 class ChatRequest(BaseModel):
     """
     Standard user request.
@@ -10,9 +13,28 @@ class ChatRequest(BaseModel):
     prompt: str = Field(
         ...,
         min_length=1,
+        max_length=MAX_PROMPT_LENGTH,
         description="User prompt",
         examples=["Explain Artificial Intelligence"],
     )
+
+
+class RouteRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=MAX_PROMPT_LENGTH)
+    preset: str = Field(default="balanced", pattern="^(quality|balanced|eco)$")
+
+
+class ExecuteRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=MAX_PROMPT_LENGTH)
+    model: str = Field(..., min_length=1, max_length=200)
+    preset: str = Field(default="balanced", pattern="^(quality|balanced|eco)$")
+    ideal_model: str | None = None
+    capability_gap: float | None = None
+    ideal_estimated_carbon_g: float | None = None
+    selected_estimated_carbon_g: float | None = None
+    selected_is_free: bool | None = None
+    task_type: str | None = None
+    fit_score: float | None = None
 
 
 class AdvancedChatRequest(BaseModel):
@@ -21,7 +43,7 @@ class AdvancedChatRequest(BaseModel):
     Allows manual model selection.
     """
 
-    prompt: str = Field(..., min_length=1)
+    prompt: str = Field(..., min_length=1, max_length=MAX_PROMPT_LENGTH)
 
     model: str | None = None
 
@@ -59,6 +81,14 @@ class BenchmarkInfo(BaseModel):
     success: bool
 
 
+class InferenceInfo(BaseModel):
+    selected_model: str
+    actual_model: str
+    fallback_used: bool
+    fallback_reason: str | None = None
+    attempts: list[dict] = Field(default_factory=list)
+
+
 class SustainabilityInfo(BaseModel):
     energy_wh: float
     carbon_g: float
@@ -79,6 +109,9 @@ class ModelComparisonInfo(BaseModel):
     complexity_score: float | None = None
     estimated_energy_wh: float | None = None
     estimated_carbon_g: float | None = None
+    carbon_source: str | None = None
+    carbon_available: bool = False
+    capability_available: bool = False
     selected: bool = False
     ideal: bool = False
 
@@ -96,6 +129,25 @@ class RoutingInfo(BaseModel):
     reason: str
     summary: str
     comparison: list[ModelComparisonInfo]
+    preset: str = "balanced"
+    ideal_estimated_carbon_g: float | None = None
+    selected_estimated_carbon_g: float | None = None
+
+
+class RouteResponse(BaseModel):
+    task: dict
+    routing: RoutingInfo
+    pipeline: dict
+
+
+class ExecuteResponse(BaseModel):
+    provider: str
+    model: str
+    content: str
+    usage: TokenUsage
+    benchmark: BenchmarkInfo
+    sustainability: SustainabilityInfo
+    inference: InferenceInfo
 
 
 class ChatResponse(BaseModel):
@@ -108,3 +160,4 @@ class ChatResponse(BaseModel):
     sustainability: SustainabilityInfo
     pipeline: dict
     routing: RoutingInfo
+    inference: InferenceInfo | None = None

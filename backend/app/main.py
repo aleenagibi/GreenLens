@@ -1,13 +1,14 @@
 from app.api.routes.chat import router as chat_router
 from app.api.routes.providers import router as provider_router
+from app.api.routes.stats import router as stats_router
 from app.core.config import settings
 from app.db import models
-from app.db.database import Base, engine
+from app.db.database import Base, engine, ensure_schema
 from app.models import provider
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-Base.metadata.create_all(bind=engine)
+ensure_schema()
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -31,6 +32,7 @@ app.add_middleware(
 
 app.include_router(provider_router)
 app.include_router(chat_router)
+app.include_router(stats_router)
 
 @app.get("/")
 def root():
