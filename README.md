@@ -83,29 +83,18 @@ the project's focus on sustainability and AI infrastructure.
 
 ## Technology Stack
 
-The project combines the following technologies, as configured in the
-repository:
-
-  -----------------------------------------------------------------------
-  Layer                               Technologies
-  ----------------------------------- -----------------------------------
-  Frontend                            React, TypeScript, Vite, CSS
-
-  API                                 Python, FastAPI, Uvicorn
-
-  Model access                        OpenRouter with an
-                                      OpenAI-compatible client
-
-  Semantic representation             Sentence Transformers
-
-  Similarity search                   FAISS and scikit-learn components
-
-  Environmental estimation            EcoLogits-based estimation where
-                                      supported
-
-  Data and persistence                PostgreSQL and browser-local
-                                      history where configured
-  -----------------------------------------------------------------------
+| Layer | Technology Stack |
+|---|---|
+| Frontend | React, TypeScript, Vite, CSS |
+| Backend | Python, FastAPI, Uvicorn |
+| LLM Integration | OpenRouter, OpenAI-compatible API |
+| Semantic Embeddings | Sentence Transformers |
+| Vector Search | FAISS |
+| Machine Learning | Scikit-learn |
+| Environmental Estimation | EcoLogits |
+| Database | PostgreSQL |
+| Local Chat History | Browser LocalStorage |
+| Version Control | Git, GitHub |
 
 ## Architecture at a Glance
 
