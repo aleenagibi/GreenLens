@@ -55,7 +55,7 @@ p {
 .shell {
   height: 100%;
   display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-columns: 235px minmax(0, 1fr);
   gap: 12px;
   /* padding: 10px; */
   background: var(--frame);
@@ -113,7 +113,6 @@ p {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 2px 4px;
 }
 .brand-mark img {
@@ -2763,7 +2762,7 @@ tr.sel td {
 .impact-panel-heading p, .insights-impact-heading p { margin:0; color:#849084; font-size:11px; }
 .impact-source { flex:none; border-radius:999px; padding:6px 9px; background:#f1f0e8; color:#81724d; font-size:10px; font-weight:700; }
 .impact-source.is-ecologits { background:#e8f2e7; color:#477d55; }
-.impact-metric-grid, .insights-impact-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.impact-metric-grid, .insights-impact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .impact-metric, .insights-impact-item { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:14px; border:1px solid #e5ece1; border-radius:14px; background:#fff; }
 .impact-icon { font-size:19px; line-height:1; }
 .impact-label { color:#788579; font-size:10px; font-weight:700; letter-spacing:.035em; text-transform:uppercase; }
@@ -2814,4 +2813,112 @@ tr.sel td {
 @media (max-width: 900px) {
   .radar-card .radar-content { grid-template-columns: minmax(0, 1fr); }
   .radar-card .radar-content > svg { max-width: 570px; }
+}
+@media (max-width: 860px) {
+  .radar-card{
+    min-height: 740px
+  }
+}
+/* Insights branded loading screen */
+
+.insights-loading {
+  min-height: 380px;
+  display: grid;
+  place-items: center;
+  background: #F4F6F2;
+  border-radius: 24px;
+}
+
+.insights-brand-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 20px;
+  animation: insights-loader-enter 0.5s ease both;
+}
+
+.insights-loader-logo {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  border: 3px solid #a5d82e;
+  animation: insights-logo-spin 3s linear infinite;
+}
+
+.insights-loader-logo img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.insights-brand-loader h2 {
+  margin: 8px 0;
+  color: #14251d;
+  font-size: 27px;
+  font-weight: 750;
+}
+
+.insights-brand-loader h2 span {
+  color: #83b921;
+}
+
+.insights-loader-tagline {
+  color: #829087;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.insights-loader-progress {
+  width: 150px;
+  height: 4px;
+  margin: 23px 0 13px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #e1e9d8;
+}
+
+.insights-loader-progress span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: #a5d82e;
+  animation: insights-progress 1.5s ease-in-out infinite;
+}
+
+.insights-brand-loader small {
+  color: #829087;
+  font-size: 12px;
+}
+
+@keyframes insights-logo-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes insights-progress {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(280%); }
+}
+
+@keyframes insights-loader-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insights-loader-logo,
+  .insights-loader-progress span {
+    animation: none;
+  }
 }

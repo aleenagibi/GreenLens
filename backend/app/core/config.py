@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     DEFAULT_MODEL: str = "openai/gpt-oss-20b:free"
     LOG_LEVEL: str = "INFO"
 
-    FRONTEND_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
+    FRONTEND_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,https://green-lens-gilt.vercel.app"
 
     SESSION_COOKIE_NAME: str = "greenlens_session"
     SESSION_SECRET: str = "Hwut8mfBOgzmN2jPVaQd4cDlBmSp_NwcjP5I0A88RKUiaF4silAZdtW7iz_nJITU"

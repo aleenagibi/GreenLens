@@ -96,13 +96,9 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
                 <strong>{fmtCarbon(a.carbonG)}</strong>
                 <small>Greenhouse gases, expressed as CO₂ equivalent</small>
               </div>
-              <div className="impact-metric water-impact">
-                <span className="impact-icon">💧</span><span className="impact-label">Water consumption</span>
-                <strong>{a.waterL != null ? formatWater(a.waterL) : 'Not available'}</strong>
-                <small>{a.waterL != null ? waterEquivalent(a.waterL) : 'EcoLogits did not return a water footprint for this inference'}</small>
-              </div>
+              
             </div>
-            <p className="impact-method-note">Energy and GHG values are estimates. Water is shown only when EcoLogits provides its usage-phase Water Consumption Footprint (WCF); fallback estimates do not invent water values.</p>
+            
           </section>
 
           <section className="card">
@@ -117,17 +113,9 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
               <div className="bar"><i style={{ width: width(selectedCarbon) }} /></div>
               <b>{selectedCarbon != null ? fmtCarbon(selectedCarbon) : '—'}</b>
             </div>
-            {carbonDifferencePercent != null && (
-              <div className="impact-comparison-note">
-                {carbonDifferencePercent > 0
-                  ? `${carbonDifferencePercent.toFixed(1)}% lower estimated carbon than the top-ranked candidate`
-                  : carbonDifferencePercent < 0
-                    ? `${Math.abs(carbonDifferencePercent).toFixed(1)}% higher estimated carbon than the top-ranked candidate`
-                    : 'Same estimated carbon as the top-ranked candidate'}
-              </div>
-            )}
+            
             <p className="reason">{routing?.summary || routing?.reason || a.reason}</p>
-            <p className="fine">Selection basis: {routing?.selection_basis || 'Not supplied'} · Preset: {routing?.preset || 'balanced'} · Candidates evaluated: {routing?.candidate_count ?? comparison.length}</p>
+            
           </section>
 
           <section className="card">
@@ -135,8 +123,8 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
             <div className="rows">
               <div className="row"><span className="row-main"><strong>Requested model</strong><small>Selected by the routing pipeline</small></span><span className="row-meta">{displayName(inference?.selected_model ?? routing?.selected_model ?? a.selectedModel)}</span></div>
               <div className="row"><span className="row-main"><strong>Actual model</strong><small>Returned by the inference provider</small></span><span className="row-meta">{displayName(inference?.actual_model ?? a.model)}</span></div>
-              <div className="row"><span className="row-main"><strong>Fallback</strong><small>{inference?.fallback_reason || 'No fallback reason reported'}</small></span><span className="row-meta">{inference?.fallback_used ? 'Used' : 'Not used'}</span></div>
-              <div className="row"><span className="row-main"><strong>Inference provider</strong><small>{registeredProvider?.display_name || details?.provider || 'Provider metadata unavailable'}</small></span><span className="row-meta">{registeredProvider ? (registeredProvider.supports_streaming ? 'Streaming supported' : 'Standard API') : 'Backend response'}</span></div>
+              <div className="row"><span className="row-main"><strong>Fallback</strong></span><span className="row-meta">{inference?.fallback_used ? 'Used' : 'Not used'}</span></div>
+             
             </div>
             {inference?.attempts?.length ? (
               <>
@@ -144,7 +132,7 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
                 <div className="rows">
                   {inference.attempts.map((attempt, index) => (
                     <div className="row" key={`${attempt.model}-${index}`}>
-                      <span className="row-main"><strong>{displayName(attempt.model)}</strong><small>{attempt.error || 'Inference completed'}</small></span>
+                      <span className="row-main"><strong>{displayName(attempt.model)}</strong></span>
                       <span className="row-meta">{attempt.success ? 'Success' : 'Failed'}</span>
                     </div>
                   ))}
@@ -160,7 +148,7 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
               <div className="row"><span className="row-main"><strong>Complexity</strong><small>{complexity?.level || 'Not reported'}</small></span><span className="row-meta">{complexity?.score != null ? `${complexity.score}/10` : '—'}</span></div>
               <div className="row"><span className="row-main"><strong>Embedding dimensions</strong></span><span className="row-meta">{pipeline?.task?.embedding_dimensions ?? '—'}</span></div>
             </div>
-            {complexity?.factors?.length ? <p className="fine">Factors: {complexity.factors.join(' · ')}</p> : null}
+           
           </section>
 
           <section className="card">
@@ -192,7 +180,7 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
               <div className="row"><span className="row-main"><strong>Prompt tokens</strong></span><span className="row-meta">{details?.usage?.prompt_tokens ?? '—'}</span></div>
               <div className="row"><span className="row-main"><strong>Completion tokens</strong></span><span className="row-meta">{details?.usage?.completion_tokens ?? '—'}</span></div>
               <div className="row"><span className="row-main"><strong>Total tokens</strong></span><span className="row-meta">{details?.usage?.total_tokens ?? '—'}</span></div>
-              {details?.context ? <div className="row"><span className="row-main"><strong>Context window</strong><small>{details.context.context_trimmed ? 'Older messages were trimmed' : 'Conversation context retained'}</small></span><span className="row-meta">{(details.context.input_tokens_actual ?? details.context.input_tokens_estimated).toLocaleString()} / {details.context.context_window_tokens.toLocaleString()}</span></div> : null}
+              {details?.context ? <div className="row"><span className="row-main"><strong>Context window</strong></span><span className="row-meta">{(details.context.input_tokens_actual ?? details.context.input_tokens_estimated).toLocaleString()} / {details.context.context_window_tokens.toLocaleString()}</span></div> : null}
             </div>
           </section>
         </div>

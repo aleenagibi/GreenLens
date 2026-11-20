@@ -389,9 +389,7 @@ export function ModelRadar({ data }: { data: ModelPerformance[] }) {
         <span>Avg. latency <b>{selected.average_latency_ms == null ? '—' : `${selected.average_latency_ms.toFixed(0)} ms`}</b></span>
       </div>
 
-      <p className="radar-note">
-        Based on actual persisted inference records for models that answered prompts. Scores are relative to the best observed model in this dataset (10 = best); lower average carbon, energy and latency produce higher efficiency scores. Reliability is the success rate. These are historical comparisons, not absolute benchmark scores.
-      </p>
+      
     </div>
   )
 }

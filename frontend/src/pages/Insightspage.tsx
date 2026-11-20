@@ -37,8 +37,28 @@ export default function InsightsPage({ catalog }: Props) {
   }, [])
 
   if (loading) {
-    return <section className="page-scroll"><div className="card empty-card"><h2>Loading Insights</h2><p>Retrieving persisted inference statistics from GreenLens.</p></div></section>
-  }
+  return (
+    <section className="page-scroll insights-loading">
+      <div className="insights-brand-loader">
+        <div className="insights-loader-logo">
+          <img src="/logo.png" alt="GreenLens" />
+        </div>
+
+        <h2>Green<span>Lens</span></h2>
+
+        <p className="insights-loader-tagline">
+          SUSTAINABLE AI, INTELLIGENTLY ROUTED
+        </p>
+
+        <div className="insights-loader-progress">
+          <span />
+        </div>
+
+        <small>Retrieving your sustainability insights...</small>
+      </div>
+    </section>
+  )
+}
 
   if (error) {
     return <section className="page-scroll"><div className="card empty-card"><h2>Insights unavailable</h2><p>{error}</p><p className="fine">Check that the GreenLens backend is running and the /stats endpoint is reachable.</p></div></section>
@@ -79,10 +99,10 @@ export default function InsightsPage({ catalog }: Props) {
   return (
     <section className="page-scroll">
       <div className="tiles four">
-        <Tile delay={0} label="Requests" value={String(stats.total_requests)} unit="" note={`${stats.successful_requests} successful · database`} />
-        <Tile delay={60} label="Energy" value={fmtEnergy(stats.total_energy_wh).split(' ')[0]} unit="Wh" note="Backend aggregate estimate" />
-        <Tile delay={120} label="Carbon" value={fmtCarbon(stats.total_carbon_g).split(' ')[0]} unit="g CO₂e" note="Backend aggregate estimate" />
-        <Tile delay={180} label="Water consumed" value={stats.total_water_l != null ? (stats.total_water_l * 1000).toFixed(stats.total_water_l < 0.001 ? 3 : 2) : '—'} unit={stats.total_water_l != null ? 'mL' : ''} note={`${stats.water_estimated_requests ?? 0} of ${stats.successful_requests} successful inferences estimated`} />
+        <Tile delay={0} label="Requests" value={String(stats.total_requests)} unit="" note={`${stats.successful_requests} Successful `} />
+        <Tile delay={60} label="Energy" value={fmtEnergy(stats.total_energy_wh).split(' ')[0]} unit="Wh" note="Estimate" />
+        <Tile delay={120} label="Carbon" value={fmtCarbon(stats.total_carbon_g).split(' ')[0]} unit="g CO₂e" note="Estimate" />
+       
       </div>
 
       <section className="card insights-impact-card">
@@ -101,13 +121,13 @@ export default function InsightsPage({ catalog }: Props) {
             <strong>{fmtCarbon(stats.total_carbon_g)}</strong>
             <small>Estimated greenhouse gases, expressed as CO₂ equivalent</small>
           </div>
-          <div className="insights-impact-item water-impact">
+          {/* <div className="insights-impact-item water-impact">
             <span className="impact-icon">💧</span><span className="impact-label">Water consumption</span>
             <strong>{stats.total_water_l != null ? `${(stats.total_water_l * 1000).toFixed(stats.total_water_l < 0.001 ? 3 : 2)} mL` : 'Not available'}</strong>
             <small>{stats.total_water_l != null ? insightsWaterEquivalent(stats.total_water_l) : 'No recorded inference returned EcoLogits WCF yet'}</small>
-          </div>
+          </div> */}
         </div>
-        <p className="impact-method-note">Electricity and GHG totals use the recorded per-inference estimates. Water is the EcoLogits usage-phase Water Consumption Footprint and is included only for requests where the provider/model calculation returned WCF ({stats.water_estimated_requests ?? 0} records). The LED comparison assumes a 10 W bulb; the teaspoon comparison uses 5 mL per teaspoon. These are explanatory equivalents, not additional measured savings.</p>
+        
       </section>
 
       <div className="insights-chart-grid">
