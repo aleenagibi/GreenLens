@@ -154,6 +154,7 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
                       <td>{candidate.estimated_carbon_g != null ? fmtCarbon(candidate.estimated_carbon_g) : '—'}</td>
                       <td>{candidate.estimated_energy_wh != null ? fmtEnergy(candidate.estimated_energy_wh) : '—'}</td>
                       <td>{candidate.selected ? 'Selected' : candidate.ideal ? 'Ideal' : candidate.is_free ? 'Free' : 'Paid'}</td>
+                      
                     </tr>
                   ))}
                 </tbody>

@@ -308,7 +308,7 @@ export default function LoginPage({ onSignedIn }: Props) {
       </section>
       <footer className="app-credit">
   <a
-    href="YOUR_GITHUB_PROFILE_URL"
+    href="https://github.com/aleenagibi/"
     target="_blank"
     rel="noopener noreferrer"
     className="app-credit-link"
