@@ -54,3 +54,5 @@ dist/
 # ==========================
 .coverage
 htmlcov/
+# Keep the safe template in version control.
+!.env.example

@@ -39,3 +39,5 @@ requests==2.32.4
 openai>=1.100.0
 #----------Carbon----------------
 ecologits==0.11.1
+# ---------- Google authentication ----------\ngoogle-auth==2.40.3
+pwdlib[argon2]==0.2.1

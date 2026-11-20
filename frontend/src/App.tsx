@@ -1,502 +1,288 @@
-import { useEffect, useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import 'katex/dist/katex.min.css'
+
+import { useCallback, useEffect, useState } from 'react'
 import './App.css'
+import {
+  fetchModelCatalog,
+  getCurrentUser,
+  logout,
+  sendPrompt,
+} from './api'
+import type { AuthUser } from './api'
+import Sidebar from './components/Sidebar'
+import { useChats } from './hooks/useChats'
+import ChatPage from './pages/ChatPage'
+import HowPage from './pages/Howpage'
+import InsightsPage from './pages/Insightspage'
+import LoginPage from './pages/LoginPage'
+import type { ModelCatalog, Page } from './types'
 
-type ComparisonModel = {
-  rank: number
-  model: string
-  display_name?: string | null
-  provider?: string | null
-  is_free: boolean
-  fit_score: number
-  capability_score?: number | null
-  capability_source: string
-  carbon_score?: number | null
-  latency_score?: number | null
-  complexity_score?: number | null
-  estimated_energy_wh?: number | null
-  estimated_carbon_g?: number | null
-  selected?: boolean
-  ideal?: boolean
-}
-
-type ChatResponse = {
-  provider: string
-  model: string
-  content: string
-  usage: {
-    prompt_tokens: number
-    completion_tokens: number
-    total_tokens: number
-  }
-  recommendation: {
-    task_type: string
-    score: number
-    reason: string
-  }
-  benchmark: {
-    latency_ms: number
-    prompt_tokens: number
-    completion_tokens: number
-    total_tokens: number
-    provider: string
-    model: string
-    success: boolean
-  }
-  sustainability: {
-    energy_wh: number
-    carbon_g: number
-    green_score: number
-  }
-  pipeline: {
-    task?: {
-      prompt?: string
-      task_type?: string
-      complexity?: {
-        score?: number
-      }
-      embedding_dimensions?: number
-    }
-    selection?: Record<string, unknown>
-    explanation?: Record<string, unknown>
-  }
-  routing: {
-    ideal_model: string
-    ideal_display_name?: string | null
-    ideal_is_free: boolean
-    selected_model: string
-    selected_display_name?: string | null
-    selected_is_free: boolean
-    capability_gap?: number | null
-    fit_score: number
-    used_free_alternative: boolean
-    reason: string
-    summary: string
-    comparison: ComparisonModel[]
-  }
-}
-
-type HistoryItem = {
-  id: string
-  prompt: string
-  content: string
-  createdAt: string
-  model: string
-  idealModel: string
-  selectedModel: string
-  taskType: string
-  carbonG: number
-  energyWh: number
-  latencyMs: number
-  fitScore: number
-  comparison: ComparisonModel[]
-}
-
-type Page = 'chat' | 'history' | 'insights' | 'how'
-
-const API_URL = 'http://127.0.0.1:8000/chat'
-const HISTORY_KEY = 'greenlens_history_v1'
-const MAX_HISTORY = 20
-
-const pipelineStages = [
-  'Task understanding',
-  'Semantic analysis',
-  'Complexity estimation',
-  'Capability evaluation',
-  'Environmental impact',
-  'Optimization',
-  'Model selection',
-  'Explanation',
-]
-
-function formatModelName(displayName?: string | null, model?: string): string {
-  if (displayName) return displayName
-  if (!model) return 'Unknown model'
-  const clean = model.includes('/') ? model.split('/').pop() ?? model : model
-  return clean
-    .replace(/:free$/i, '')
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
-}
-
-function formatLatency(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)} ms`
-  return `${(ms / 1000).toFixed(1)} sec`
-}
-
-function formatCarbon(value: number): string {
-  if (value < 0.01) return `${value.toFixed(4)} g CO₂e`
-  return `${value.toFixed(2)} g CO₂e`
-}
-
-function formatEnergy(value: number): string {
-  if (value < 0.01) return `${value.toFixed(4)} Wh`
-  return `${value.toFixed(2)} Wh`
-}
-
-function impactLabel(carbon: number): string {
-  if (carbon < 0.5) return 'Low estimated impact'
-  if (carbon < 2) return 'Moderate estimated impact'
-  return 'Higher estimated impact'
-}
-
-function impactDescription(carbon: number): string {
-  if (carbon < 0.5) return 'This response used a relatively low-impact inference route.'
-  if (carbon < 2) return 'This response used a moderate-impact inference route.'
-  return 'This response required a higher-impact inference route.'
-}
-
-function loadHistory(): HistoryItem[] {
-  try {
-    const saved = localStorage.getItem(HISTORY_KEY)
-    return saved ? JSON.parse(saved) : []
-  } catch {
-    return []
-  }
-}
-
-function compactHistoryItem(response: ChatResponse, prompt: string): HistoryItem {
-  const routing = response.routing
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    prompt,
-    content: response.content,
-    createdAt: new Date().toISOString(),
-    model: response.benchmark.model,
-    idealModel: formatModelName(routing.ideal_display_name, routing.ideal_model),
-    selectedModel: formatModelName(routing.selected_display_name, routing.selected_model),
-    taskType: response.recommendation.task_type,
-    carbonG: response.sustainability.carbon_g,
-    energyWh: response.sustainability.energy_wh,
-    latencyMs: response.benchmark.latency_ms,
-    fitScore: routing.fit_score,
-    comparison: routing.comparison.slice(0, 30),
-  }
-}
-
-function App() {
-  const [page, setPage] = useState<Page>('chat')
-  const [prompt, setPrompt] = useState('')
-  const [response, setResponse] = useState<ChatResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [history, setHistory] = useState<HistoryItem[]>(loadHistory)
-  const [modal, setModal] = useState<'why' | 'impact' | 'landscape' | null>(null)
-
-  useEffect(() => {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)))
-  }, [history])
-
-  const routing = response?.routing
-  const sustainability = response?.sustainability
-  const benchmark = response?.benchmark
-
-  const selectedModel = routing
-    ? formatModelName(routing.selected_display_name, routing.selected_model)
-    : ''
-  const idealModel = routing
-    ? formatModelName(routing.ideal_display_name, routing.ideal_model)
-    : ''
-
-  const actualModel = response ? formatModelName(undefined, response.benchmark.model) : ''
-
-  const selectedCandidate = routing?.comparison?.find((candidate) => candidate.selected)
-  const idealCandidate = routing?.comparison?.find((candidate) => candidate.ideal)
-
-  const carbonDifference = useMemo(() => {
-    if (!idealCandidate?.estimated_carbon_g || selectedCandidate?.estimated_carbon_g == null) return null
-    return idealCandidate.estimated_carbon_g - selectedCandidate.estimated_carbon_g
-  }, [idealCandidate, selectedCandidate])
-
-  const carbonReduction = useMemo(() => {
-    if (carbonDifference == null || !idealCandidate?.estimated_carbon_g || carbonDifference <= 0) return null
-    return Math.round((carbonDifference / idealCandidate.estimated_carbon_g) * 100)
-  }, [carbonDifference, idealCandidate])
-
-  const submitPrompt = async (value = prompt) => {
-    const trimmedPrompt = value.trim()
-    if (!trimmedPrompt || loading) return
-
-    setPrompt(trimmedPrompt)
-    setLoading(true)
-    setError('')
-    setResponse(null)
-    setModal(null)
-    setPage('chat')
-
-    try {
-      const result = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: trimmedPrompt }),
-      })
-      const data = await result.json()
-      if (!result.ok) {
-        throw new Error(data?.detail?.message || data?.detail || 'GreenLens could not process this request.')
-      }
-      setResponse(data)
-      setHistory((current) => [compactHistoryItem(data, trimmedPrompt), ...current].slice(0, MAX_HISTORY))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong while contacting GreenLens.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault()
-      submitPrompt()
-    }
-  }
-
-  const startNewChat = () => {
-    setPrompt('')
-    setResponse(null)
-    setError('')
-    setModal(null)
-    setPage('chat')
-  }
-
-  const openHistoryItem = (item: HistoryItem) => {
-    const restored: ChatResponse = {
-      provider: 'OpenRouter',
-      model: item.model,
-      content: item.content,
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      recommendation: { task_type: item.taskType, score: item.fitScore, reason: 'Restored from conversation history.' },
-      benchmark: {
-        latency_ms: item.latencyMs,
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        provider: 'OpenRouter',
-        model: item.model,
-        success: true,
-      },
-      sustainability: { energy_wh: item.energyWh, carbon_g: item.carbonG, green_score: 0 },
-      pipeline: {},
-      routing: {
-        ideal_model: item.idealModel,
-        ideal_display_name: item.idealModel,
-        ideal_is_free: false,
-        selected_model: item.selectedModel,
-        selected_display_name: item.selectedModel,
-        selected_is_free: true,
-        fit_score: item.fitScore,
-        used_free_alternative: item.idealModel !== item.selectedModel,
-        capability_gap: null,
-        reason: 'This conversation was restored from history. Full live routing metadata is not stored for historical conversations.',
-        summary: 'Historical conversation',
-        comparison: item.comparison,
-      },
-    }
-    setPrompt(item.prompt)
-    setResponse(restored)
-    setModal(null)
-    setPage('chat')
-  }
-
-  const clearHistory = () => {
-    setHistory([])
-    localStorage.removeItem(HISTORY_KEY)
-  }
-
+function AppCredit() {
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <button className="brand" onClick={() => setPage('chat')} aria-label="Go to GreenLens chat">
-          <div className="brand-mark"><span /><span /><span /></div>
-          <div>
-            <div className="brand-name">GREENLENS</div>
-            <div className="brand-tagline">TASK IN. RIGHT MODEL OUT.</div>
-          </div>
-        </button>
-
-        <nav className="top-navigation" aria-label="Main navigation">
-          <button className={page === 'chat' ? 'active' : ''} onClick={() => setPage('chat')}>CHAT</button>
-          <button className={page === 'history' ? 'active' : ''} onClick={() => setPage('history')}>HISTORY</button>
-          <button className={page === 'insights' ? 'active' : ''} onClick={() => setPage('insights')}>INSIGHTS</button>
-          <button className={page === 'how' ? 'active' : ''} onClick={() => setPage('how')}>HOW IT WORKS</button>
-        </nav>
-
-        <button className="new-inference-button" onClick={startNewChat}>
-          <span>+</span> NEW CHAT
-        </button>
-      </header>
-
-      {page === 'chat' && (
-        <main className="chat-page">
-          <div className={`chat-column ${response ? 'has-response' : ''}`}>
-            {!response && !loading && (
-              <section className="welcome-block">
-                <div className="welcome-kicker"><span /> CARBON-AWARE AI ROUTING</div>
-                <h1>Ask anything.<br /><em>GreenLens chooses the route.</em></h1>
-                <p>Get the answer you need while GreenLens quietly considers model capability, performance and environmental impact.</p>
-              </section>
-            )}
-
-            {response && (
-              <section className="conversation-prompt">
-                <span className="prompt-label">YOUR TASK</span>
-                <p>{prompt}</p>
-              </section>
-            )}
-
-            {loading && (
-              <section className="loading-card">
-                <div className="loading-orb"><span /></div>
-                <div>
-                  <span className="prompt-label">GREENLENS IS WORKING</span>
-                  <h2>Finding a suitable route for your task...</h2>
-                  <p>Evaluating models before generating your answer.</p>
-                </div>
-              </section>
-            )}
-
-            {error && (
-              <section className="error-card">
-                <strong>GreenLens couldn't complete the inference.</strong>
-                <p>{error}</p>
-              </section>
-            )}
-
-            {response && routing && sustainability && benchmark && (
-              <section className="answer-section">
-                <div className="generated-row">
-                  <div className="generated-by">
-                    <span className="model-dot">✦</span>
-                    <span>Generated by</span>
-                    <strong>{actualModel}</strong>
-                    {routing.selected_is_free && <span className="free-pill">FREE</span>}
-                  </div>
-                  <span className="answer-time">{formatLatency(benchmark.latency_ms)}</span>
-                </div>
-
-                <article className="answer-content">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}>{response.content}</ReactMarkdown>
-                </article>
-
-                <div className="greenlens-tools">
-                  <button className="impact-chip" onClick={() => setModal('impact')}>
-                    <span className="chip-icon">⌁</span>
-                    <span><strong>{impactLabel(sustainability.carbon_g)}</strong><small>{impactDescription(sustainability.carbon_g)}</small></span>
-                    <b>›</b>
-                  </button>
-
-                  <button className="why-chip" onClick={() => setModal('why')}>
-                    <span><strong>Why this model?</strong><small>{idealModel} → {selectedModel}</small></span>
-                    <b>›</b>
-                  </button>
-
-                  <button className="landscape-link" onClick={() => setModal('landscape')}>
-                    View model landscape <span>→</span>
-                  </button>
-                </div>
-              </section>
-            )}
-
-            <section className="composer-wrap">
-              <textarea
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Message GreenLens..."
-                disabled={loading}
-                rows={response ? 3 : 4}
-              />
-              <div className="composer-footer">
-                <span>Ctrl + Enter to send</span>
-                <button className="send-button" onClick={() => submitPrompt()} disabled={!prompt.trim() || loading}>
-                  {loading ? <span className="button-spinner" /> : '↑'}
-                </button>
-              </div>
-            </section>
-          </div>
-        </main>
-      )}
-
-      {page === 'history' && (
-        <main className="page-container">
-          <div className="page-heading">
-            <div><span className="welcome-kicker"><span /> CONVERSATIONS</span><h1>History</h1><p>Your recent GreenLens conversations.</p></div>
-            {history.length > 0 && <button className="text-button danger" onClick={clearHistory}>Clear history</button>}
-          </div>
-          {history.length === 0 ? (
-            <div className="empty-state"><div>◌</div><h2>No conversations yet</h2><p>Your GreenLens conversations will appear here after you ask a question.</p><button className="primary-button" onClick={startNewChat}>Start a chat</button></div>
-          ) : (
-            <div className="history-list">
-              {history.map((item) => (
-                <button className="history-item" key={item.id} onClick={() => openHistoryItem(item)}>
-                  <div className="history-main"><strong>{item.prompt}</strong><span>{item.content.replace(/[#*_`|]/g, '').slice(0, 150)}{item.content.length > 150 ? '…' : ''}</span></div>
-                  <div className="history-meta"><span>{formatModelName(undefined, item.model)}</span><small>{new Date(item.createdAt).toLocaleString()}</small></div>
-                  <span className="history-arrow">→</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </main>
-      )}
-
-      {page === 'insights' && (
-        <main className="page-container">
-          <div className="page-heading"><div><span className="welcome-kicker"><span /> GREENLENS INSIGHTS</span><h1>Your AI footprint</h1><p>A simple view of the conversations recorded in this browser.</p></div></div>
-          <section className="insight-grid">
-            <div className="insight-stat"><span>CONVERSATIONS</span><strong>{history.length}</strong><small>Stored in this browser</small></div>
-            <div className="insight-stat"><span>ESTIMATED ENERGY</span><strong>{formatEnergy(history.reduce((sum, item) => sum + item.energyWh, 0))}</strong><small>Across recorded responses</small></div>
-            <div className="insight-stat"><span>ESTIMATED CARBON</span><strong>{formatCarbon(history.reduce((sum, item) => sum + item.carbonG, 0))}</strong><small>Estimated CO₂e</small></div>
-            <div className="insight-stat"><span>MODELS USED</span><strong>{new Set(history.map((item) => item.model)).size}</strong><small>Actual answering models</small></div>
-          </section>
-          <section className="insight-card">
-            <div className="insight-card-header"><div><span className="prompt-label">MODEL LANDSCAPE</span><h2>Recent routing decisions</h2></div><span>{history.length} recorded</span></div>
-            {history.length === 0 ? <p className="muted">Run a few tasks to build your GreenLens history.</p> : <div className="decision-list">{history.slice(0, 10).map((item) => <div className="decision-row" key={item.id}><div><strong>{item.selectedModel}</strong><span>{item.prompt}</span></div><div><strong>{item.fitScore.toFixed(2)}</strong><span>fit</span></div><div><strong>{formatCarbon(item.carbonG)}</strong><span>impact</span></div></div>)}</div>}
-          </section>
-          <p className="insight-note">These dashboard figures are based on conversations stored by this browser. They are estimates, not a claim of measured real-world emissions.</p>
-        </main>
-      )}
-
-      {page === 'how' && (
-        <main className="page-container how-page">
-          <div className="page-heading"><div><span className="welcome-kicker"><span /> UNDER THE HOOD</span><h1>How GreenLens works</h1><p>GreenLens evaluates a task before inference and uses that analysis to choose a route.</p></div></div>
-          <div className="pipeline-grid">{pipelineStages.map((stage, index) => <div className="pipeline-step" key={stage}><span>{String(index + 1).padStart(2, '0')}</span><strong>{stage}</strong>{index < pipelineStages.length - 1 && <i>→</i>}</div>)}</div>
-          <section className="how-cards"><article><span>01</span><h2>Capability</h2><p>GreenLens uses available benchmark signals to estimate how well a model fits the task.</p></article><article><span>02</span><h2>Impact</h2><p>Model-specific sustainability estimates are used where available, with a fallback estimate when coverage is unavailable.</p></article><article><span>03</span><h2>Optimization</h2><p>The system combines the available signals into a GreenLens score and identifies an ideal route.</p></article><article><span>04</span><h2>Free execution</h2><p>When the ideal route is paid, GreenLens can select a suitable free alternative for actual execution.</p></article></section>
-        </main>
-      )}
-
-      {modal && response && routing && sustainability && benchmark && (
-        <div className="modal-backdrop" onMouseDown={() => setModal(null)}>
-          <div className={`modal-panel ${modal === 'landscape' ? 'wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
-            <button className="modal-close" onClick={() => setModal(null)}>×</button>
-            {modal === 'why' && <>
-              <span className="welcome-kicker"><span /> ROUTING EXPLANATION</span><h2>Why this model?</h2>
-              <p className="modal-lead">GreenLens evaluated the task before answering and separated the <strong>ideal model</strong> from the <strong>model actually used</strong>.</p>
-              <div className="route-flow"><div><span>IDEAL</span><strong>{idealModel}</strong><small>{routing.ideal_is_free ? 'Free' : 'Paid'}</small></div><b>→</b><div className="selected-box"><span>SELECTED</span><strong>{selectedModel}</strong><small>{routing.selected_is_free ? 'Free ✓' : 'Paid'}</small></div></div>
-              <div className="reason-box"><span>GREENLENS' REASON</span><p>{routing.reason}</p></div>
-              <div className="modal-stats"><div><span>Task fit</span><strong>{routing.fit_score.toFixed(2)}/10</strong></div><div><span>Response time</span><strong>{formatLatency(benchmark.latency_ms)}</strong></div><div><span>Actual model</span><strong>{actualModel}</strong></div></div>
-            </>}
-            {modal === 'impact' && <>
-              <span className="welcome-kicker"><span /> ENVIRONMENTAL IMPACT</span><h2>{impactLabel(sustainability.carbon_g)}</h2><p className="modal-lead">{impactDescription(sustainability.carbon_g)} The values below are estimates.</p>
-              <div className="impact-detail-hero"><strong>{formatCarbon(sustainability.carbon_g)}</strong><span>estimated carbon impact</span></div>
-              <div className="modal-stats"><div><span>Energy</span><strong>{formatEnergy(sustainability.energy_wh)}</strong></div><div><span>Green score</span><strong>{sustainability.green_score.toFixed(2)}/10</strong></div><div><span>Response</span><strong>{formatLatency(benchmark.latency_ms)}</strong></div></div>
-              {carbonReduction != null && <div className="saving-note"><strong>{carbonReduction}% lower estimated carbon</strong><span>than the ideal model's pre-inference estimate.</span></div>}
-              <p className="modal-footnote">Environmental figures are model estimates and can vary with infrastructure, location and inference conditions.</p>
-            </>}
-            {modal === 'landscape' && <>
-              <span className="welcome-kicker"><span /> MODEL LANDSCAPE</span><h2>How the candidates compared</h2><p className="modal-lead">The full candidate set considered for this request. Values are GreenLens estimates.</p>
-              <div className="table-scroll"><table className="landscape-table"><thead><tr><th>#</th><th>MODEL</th><th>FIT</th><th>CARBON</th><th>ENERGY</th><th>STATUS</th></tr></thead><tbody>{routing.comparison.map((candidate) => <tr key={`${candidate.rank}-${candidate.model}`} className={candidate.selected ? 'selected-row' : ''}><td>{candidate.rank}</td><td><strong>{formatModelName(candidate.display_name, candidate.model)}</strong><small>{candidate.provider || 'OpenRouter'}</small></td><td>{candidate.fit_score.toFixed(2)}</td><td>{candidate.estimated_carbon_g != null ? formatCarbon(candidate.estimated_carbon_g) : '—'}</td><td>{candidate.estimated_energy_wh != null ? formatEnergy(candidate.estimated_energy_wh) : '—'}</td><td>{candidate.selected ? 'SELECTED' : candidate.ideal ? 'IDEAL' : candidate.is_free ? 'FREE' : 'PAID'}</td></tr>)}</tbody></table></div>
-            </>}
-          </div>
-        </div>
-      )}
-
-      <footer className="footer"><span>GREENLENS · SMARTER AI. LOWER IMPACT.</span><span>SDG 13 · CLIMATE ACTION</span></footer>
-    </div>
+    <footer className="app-credit">
+      <a
+        href="YOUR_GITHUB_PROFILE_URL"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="app-credit-link"
+        aria-label="GitHub - Aleena Gibi"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="17"
+          height="17"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M12 .9a11.1 11.1 0 0 0-3.51 21.63c.56.1.76-.24.76-.54v-2.08c-3.1.67-3.76-1.32-3.76-1.32-.51-1.3-1.24-1.65-1.24-1.65-1.02-.7.08-.69.08-.69 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.62 1.22 3.26.93.1-.72.39-1.22.71-1.5-2.48-.28-5.09-1.24-5.09-5.52 0-1.22.44-2.22 1.16-3-.12-.28-.5-1.42.11-2.96 0 0 .95-.3 3.11 1.15a10.8 10.8 0 0 1 5.66 0c2.16-1.45 3.1-1.15 3.1-1.15.62 1.54.23 2.68.12 2.96.72.78 1.15 1.78 1.15 3 0 4.29-2.61 5.23-5.1 5.51.4.35.76 1.02.76 2.06v3.15c0 .3.2.65.77.54A11.1 11.1 0 0 0 12 .9Z" />
+        </svg>
+        <span>GitHub · Aleena Gibi</span>
+      </a>
+    </footer>
   )
 }
 
-export default App
+export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+
+  const store = useChats(Boolean(user))
+
+  const [page, setPage] = useState<Page>('chat')
+  const [menu, setMenu] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
+
+  // Restore the authenticated user without importing browser-wide legacy chats.
+  useEffect(() => {
+    let active = true
+
+    getCurrentUser()
+      .then((current) => {
+        if (active) setUser(current)
+      })
+      .catch(() => {
+        if (active) setUser(null)
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const onSignedIn = useCallback(async () => {
+    try {
+      const current = await getCurrentUser()
+      setUser(current)
+      setAuthError('')
+    } catch (error) {
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : 'Could not establish your session.'
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+
+    let active = true
+
+    fetchModelCatalog()
+      .then((data) => {
+        if (active) setCatalog(data)
+      })
+      .catch((error) => {
+        console.warn('Could not load the live model catalogue:', error)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [user])
+
+  const send = async (prompt: string) => {
+    if (busy || !user) return
+
+    setPage('chat')
+    setBusy(true)
+
+    let chatId = store.activeId
+
+    try {
+      if (!chatId) chatId = await store.create()
+
+      const { turnId } = store.startTurn(prompt, chatId)
+
+      try {
+        const answer = await sendPrompt(prompt, chatId)
+        store.finishTurn(chatId, turnId, { answer })
+      } catch (error) {
+        store.finishTurn(chatId, turnId, {
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not reach the GreenLens server.',
+        })
+      }
+    } catch (error) {
+      setAuthError(
+        error instanceof Error
+          ? error.message
+          : 'Could not create a conversation.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const go = (p: Page) => {
+    setPage(p)
+    setMenu(false)
+  }
+
+  const title =
+    page === 'chat'
+      ? store.active?.title ?? 'New chat'
+      : page === 'insights'
+        ? 'Insights'
+        : 'How it works'
+
+  const signOut = async () => {
+    try {
+      await logout()
+      setUser(null)
+      setCatalog(null)
+      setPage('chat')
+      setMenu(false)
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : 'Could not sign out.'
+      )
+    }
+  }
+
+  if (authLoading) {
+    return (
+      <main className="gl-loading-screen">
+        <div className="gl-loading-content">
+          <div className="gl-loading-logo">
+            <img src="/logo.png" alt="GreenLens" />
+          </div>
+
+          <h2>
+            Green<span>Lens</span>
+          </h2>
+
+          <p>SUSTAINABLE AI, INTELLIGENTLY ROUTED</p>
+
+          <div className="gl-loading-indicator">
+            <span />
+          </div>
+
+          <small>Preparing your workspace...</small>
+        </div>
+      </main>
+    )
+  }
+
+  if (!user) {
+    return (
+      <>
+        <LoginPage onSignedIn={onSignedIn} />
+        {authError && (
+          <p className="auth-global-error">{authError}</p>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div className="frame">
+      <div className="shell">
+        {menu && (
+          <div
+            className="side-scrim"
+            onClick={() => setMenu(false)}
+          />
+        )}
+
+        <Sidebar
+          chats={store.chats}
+          activeId={store.activeId}
+          page={page}
+          open={menu}
+          user={user}
+          onLogout={signOut}
+          onNew={() => {
+            store.setActiveId(null)
+            go('chat')
+          }}
+          onSelect={(id) => {
+            void store.load(id).catch((error) =>
+              setAuthError(
+                error instanceof Error
+                  ? error.message
+                  : 'Could not load conversation.'
+              )
+            )
+            go('chat')
+          }}
+          onDelete={(id) => {
+            void store.remove(id).catch((error) =>
+              setAuthError(
+                error instanceof Error
+                  ? error.message
+                  : 'Could not delete conversation.'
+              )
+            )
+          }}
+          onPage={go}
+        />
+
+        <div className="main">
+          <header className="topbar">
+            <button
+              className="menu-btn"
+              onClick={() => setMenu(true)}
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
+            <span className="crumb">{title}</span>
+          </header>
+
+          {authError && (
+            <div className="app-alert" role="alert">
+              {authError}
+              <button onClick={() => setAuthError('')}>
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {page === 'chat' && (
+            <ChatPage
+              chat={store.active}
+              busy={busy}
+              onSend={send}
+              catalog={catalog}
+            />
+          )}
+
+          {page === 'insights' && (
+            <InsightsPage catalog={catalog} />
+          )}
+
+          {page === 'how' && <HowPage />}
+
+          <AppCredit />
+        </div>
+      </div>
+    </div>
+  )
+}

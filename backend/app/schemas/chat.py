@@ -1,22 +1,28 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
 MAX_PROMPT_LENGTH = None
 
 
+class ContextMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=100_000)
+
+
 class ChatRequest(BaseModel):
-    """
-    Standard user request.
-    GreenLens chooses the provider automatically.
-    """
+    """Authenticated chat request. History is loaded by the backend, never trusted from the browser."""
 
     prompt: str = Field(
-        ...,
-        min_length=1,
-        max_length=MAX_PROMPT_LENGTH,
-        description="User prompt",
+        ..., min_length=1, max_length=100_000,
+        description="Latest user prompt",
         examples=["Explain Artificial Intelligence"],
     )
+    conversation_id: str | None = Field(default=None, max_length=36)
+    # Accepted temporarily for backward compatibility with older clients.
+    # The authenticated route intentionally ignores this client-supplied history.
+    history: list[ContextMessage] = Field(default_factory=list, max_length=100)
 
 
 class RouteRequest(BaseModel):
@@ -93,6 +99,8 @@ class SustainabilityInfo(BaseModel):
     energy_wh: float
     carbon_g: float
     green_score: float
+    water_l: float | None = None
+    source: str = "unknown"
 
 
 class ModelComparisonInfo(BaseModel):
@@ -132,6 +140,10 @@ class RoutingInfo(BaseModel):
     preset: str = "balanced"
     ideal_estimated_carbon_g: float | None = None
     selected_estimated_carbon_g: float | None = None
+    carbon_savings_g: float | None = None
+    carbon_savings_percent: float | None = None
+    selection_basis: str | None = None
+    candidate_count: int | None = None
 
 
 class RouteResponse(BaseModel):
@@ -161,3 +173,5 @@ class ChatResponse(BaseModel):
     pipeline: dict
     routing: RoutingInfo
     inference: InferenceInfo | None = None
+    context: dict | None = None
+    conversation_id: str | None = None

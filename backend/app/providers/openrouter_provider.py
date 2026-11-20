@@ -39,6 +39,7 @@ class OpenRouterProvider(BaseProvider):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 512,
+        messages: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
 
         if model is None:
@@ -46,13 +47,9 @@ class OpenRouterProvider(BaseProvider):
 
         response = self.client.chat.completions.create(
             model=model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
+            messages=messages or [{"role": "user", "content": prompt}],
             temperature=temperature,
+            max_tokens=max_tokens,
             
             extra_headers={
                 "HTTP-Referer": "http://localhost:8000",
@@ -78,9 +75,9 @@ class OpenRouterProvider(BaseProvider):
             "model": response.model,
             "content": response.choices[0].message.content,
             "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
+                "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                "total_tokens": response.usage.total_tokens if response.usage else 0,
             },
             "impacts": response.impacts,
         }

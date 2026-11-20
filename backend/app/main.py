@@ -1,4 +1,7 @@
+from app.api.routes.auth import router as auth_router
+from app.api.routes.conversations import router as conversations_router
 from app.api.routes.chat import router as chat_router
+from app.api.routes.catalog import router as catalog_router
 from app.api.routes.providers import router as provider_router
 from app.api.routes.stats import router as stats_router
 from app.core.config import settings
@@ -30,7 +33,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
+app.include_router(conversations_router)
 app.include_router(provider_router)
+app.include_router(catalog_router)
 app.include_router(chat_router)
 app.include_router(stats_router)
 

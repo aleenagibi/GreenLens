@@ -13,6 +13,7 @@ class BaseProvider(ABC):
         model: str,
         temperature: float = 0.7,
         max_tokens: int = 1024,
+        messages: list[dict[str, str]] | None = None,
     ) -> dict:
         """
         Generate an AI response.

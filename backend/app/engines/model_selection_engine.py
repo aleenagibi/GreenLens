@@ -147,7 +147,22 @@ class ModelSelectionEngine:
             candidates,
             key=lambda candidate: candidate["score"],
         )
-
+        print(
+            "[GreenLens DEBUG] Ranked candidates:",
+            sorted(
+                [
+                    {
+                        "model": c["model"],
+                        "score": c["score"],
+                        "is_free": c.get("is_free", False),
+                        "capability_score": c.get("capability_score"),
+                    }
+                    for c in candidates
+                ],
+                key=lambda c: c["score"],
+                reverse=True,
+            )[:10],
+        )
         # --------------------------------------------------
         # 2. Select the actual free model
         # --------------------------------------------------
@@ -192,7 +207,7 @@ class ModelSelectionEngine:
                 if suitable:
                     selected = max(
                         suitable,
-                        key=lambda candidate: candidate["capability_score"],
+                        key=lambda candidate: candidate["score"],
                     )
                 else:
                     selected = min(
@@ -214,6 +229,7 @@ class ModelSelectionEngine:
                 selected = max(
                     free_candidates,
                     key=lambda candidate: candidate["score"],
+                    
                 )
 
                 selection_basis = "greenlens_score_fallback"

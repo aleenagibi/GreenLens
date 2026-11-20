@@ -1,6 +1,7 @@
 """GreenLens routing and inference orchestration service."""
 
 import time
+from uuid import UUID
 
 from app.db.database import SessionLocal
 from app.db.models import InferenceRecord
@@ -10,6 +11,7 @@ from app.engines.sustainability_engine import SustainabilityEngine
 from app.providers.provider_factory import ProviderFactory
 from app.services.model_catalog_service import ModelCatalogService
 from app.services.model_performance_service import ModelPerformanceService
+from app.services.context_window_service import ContextWindowService
 
 
 class ChatService:
@@ -49,6 +51,7 @@ class ChatService:
                 "estimated_tokens": max_tokens,
                 "latency_score": 5.0,
                 "is_free": item["is_free"],
+                "context_length": item.get("context_length"),
                 "artificial_analysis": item.get("artificial_analysis"),
             }
             for item in catalog_models
@@ -76,6 +79,19 @@ class ChatService:
         ideal_candidate = candidate(ideal_id)
         selected_candidate = candidate(selected_id)
 
+        ideal_carbon = (ideal_candidate or {}).get("estimated_carbon_g")
+        selected_carbon = (selected_candidate or {}).get("estimated_carbon_g")
+        carbon_savings = (
+            max(0.0, float(ideal_carbon) - float(selected_carbon))
+            if ideal_carbon is not None and selected_carbon is not None
+            else None
+        )
+        carbon_savings_percent = (
+            round((carbon_savings / float(ideal_carbon)) * 100, 2)
+            if carbon_savings is not None and float(ideal_carbon) > 0
+            else None
+        )
+
         routing = {
             "ideal_model": ideal_id,
             "ideal_display_name": (ideal_candidate or {}).get("display_name"),
@@ -91,7 +107,11 @@ class ChatService:
             "comparison": comparison,
             "preset": preset,
             "ideal_estimated_carbon_g": (ideal_candidate or {}).get("estimated_carbon_g"),
-            "selected_estimated_carbon_g": (selected_candidate or {}).get("estimated_carbon_g"),
+            "selected_estimated_carbon_g": selected_carbon,
+            "carbon_savings_g": carbon_savings,
+            "carbon_savings_percent": carbon_savings_percent,
+            "selection_basis": selection.get("selection_basis"),
+            "candidate_count": len(comparison),
             "selected_is_free": selection["selected_is_free"],
         }
         print(f"[GreenLens] TOTAL ROUTE: {time.perf_counter() - total_start:.3f}s")
@@ -115,6 +135,8 @@ class ChatService:
         fit_score: float | None = None,
         temperature: float = 0.7,
         max_tokens: int = 512,
+        history: list[dict] | None = None,
+        user_id: UUID | None = None,
     ) -> dict:
         candidates = self._prepare_candidates(max_tokens)
         free_ids = {c["model"] for c in candidates if c.get("is_free", False)}
@@ -133,13 +155,23 @@ class ChatService:
         response = None
         actual_model = None
         start_time = None
+        context_metadata = None
+        candidate_by_id = {item["model"]: item for item in candidates}
         for candidate_model in models_to_try:
             attempted_models.add(candidate_model)
             start_time = BenchmarkEngine.start_timer()
             try:
+                candidate_info = candidate_by_id.get(candidate_model, {})
+                messages, context_metadata = ContextWindowService.prepare(
+                    prompt=prompt,
+                    history=history,
+                    context_length=candidate_info.get("context_length"),
+                    max_output_tokens=max_tokens,
+                )
                 response = provider.generate_response(
                     prompt=prompt, model=candidate_model,
                     temperature=temperature, max_tokens=max_tokens,
+                    messages=messages,
                 )
                 if not response.get("content") or not str(response["content"]).strip():
                     raise RuntimeError(f"No text content returned by model {candidate_model}.")
@@ -158,6 +190,8 @@ class ChatService:
         latency_ms = BenchmarkEngine.calculate_latency(start_time)
         ModelPerformanceService.record_latency(model=actual_model, latency_ms=latency_ms)
         benchmark = BenchmarkEngine.create_result(response=response, latency_ms=latency_ms)
+        if context_metadata is not None:
+            context_metadata["input_tokens_actual"] = benchmark.prompt_tokens
         sustainability = SustainabilityEngine.calculate(
             total_tokens=benchmark.total_tokens, eco_impacts=response.get("impacts")
         )
@@ -177,11 +211,13 @@ class ChatService:
             "benchmark": benchmark.to_dict(),
             "sustainability": sustainability.to_dict(),
             "inference": inference,
+            "context": context_metadata,
         }
 
         db = SessionLocal()
         try:
             record = InferenceRecord(
+                user_id=user_id,
                 prompt=prompt,
                 provider=response["provider"],
                 model=actual_model,
@@ -200,6 +236,8 @@ class ChatService:
                 total_tokens=benchmark.total_tokens,
                 energy_wh=sustainability.energy_wh,
                 carbon_g=sustainability.carbon_g,
+                water_l=sustainability.water_l,
+                sustainability_source=sustainability.source,
                 green_score=sustainability.green_score,
                 success=benchmark.success,
             )
@@ -210,8 +248,17 @@ class ChatService:
 
         return result
 
-    def generate_response(self, prompt: str, model: str | None = None, temperature: float = 0.7, max_tokens: int = 512) -> dict:
-        """Backward-compatible combined endpoint: route, then execute."""
+    def generate_response(
+        self,
+        prompt: str,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+        history: list[dict] | None = None,
+        conversation_id: str | None = None,
+        user_id: UUID | None = None,
+    ) -> dict:
+        """Route on the latest prompt, then infer with a model-aware history window."""
         route_result = self.route(prompt=prompt, max_tokens=max_tokens)
         routing = route_result["routing"]
         selected = model or routing["selected_model"]
@@ -223,6 +270,8 @@ class ChatService:
             selected_is_free=routing["selected_is_free"],
             task_type=route_result["task"]["task_type"],
             fit_score=routing["fit_score"],
+            history=history,
+            user_id=user_id,
         )
         execution["pipeline"] = route_result["pipeline"]
         execution["recommendation"] = {
@@ -231,4 +280,5 @@ class ChatService:
             "reason": routing["reason"],
         }
         execution["routing"] = routing
+        execution["conversation_id"] = conversation_id
         return execution
