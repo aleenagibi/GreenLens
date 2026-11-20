@@ -1,0 +1,9 @@
+
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://al7929-school-template-engine.hf.space/:path*"
+    }
+  ]
+}
