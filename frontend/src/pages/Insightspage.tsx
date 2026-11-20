@@ -14,10 +14,7 @@ const insightsLedEquivalent = (energyWh: number) => {
   if (minutes < 60) return `About ${minutes.toFixed(1)} minutes of a 10 W LED bulb`
   return `About ${(minutes / 60).toFixed(2)} hours of a 10 W LED bulb`
 }
-const insightsWaterEquivalent = (litres: number) => {
-  const teaspoons = (litres * 1000) / 5
-  return `About ${teaspoons < 0.1 ? teaspoons.toFixed(3) : teaspoons.toFixed(2)} teaspoons (5 mL each)`
-}
+
 
 export default function InsightsPage({ catalog }: Props) {
   const [stats, setStats] = useState<InsightsData | null>(null)

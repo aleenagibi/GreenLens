@@ -8,14 +8,7 @@ const ledEquivalent = (energyWh: number) => {
   if (seconds < 60) return `About ${seconds.toFixed(1)} seconds of a 10 W LED bulb`
   return `About ${(seconds / 60).toFixed(1)} minutes of a 10 W LED bulb`
 }
-const formatWater = (litres: number) => {
-  const ml = litres * 1000
-  return ml < 1 ? `${ml.toFixed(3)} mL` : `${ml.toFixed(2)} mL`
-}
-const waterEquivalent = (litres: number) => {
-  const teaspoons = (litres * 1000) / 5 // 1 metric teaspoon = 5 mL
-  return `About ${teaspoons < 0.1 ? teaspoons.toFixed(3) : teaspoons.toFixed(2)} teaspoon${teaspoons === 1 ? '' : 's'} (5 mL each)`
-}
+
 
 type TileProps = { label: string; value: string; unit: string; note: string; delay: number }
 
@@ -46,17 +39,12 @@ export default function Inspector({ answer: a, catalog, onClose }: { answer: Ans
   const selectedCarbon = routing?.selected_estimated_carbon_g ?? comparison.find((candidate) => candidate.selected)?.estimated_carbon_g ?? null
   // The "ideal" candidate is the highest-ranked candidate, not a measured
   // counterfactual. Show a signed estimate difference instead of claiming savings.
-  const carbonDifference = idealCarbon != null && selectedCarbon != null
-    ? idealCarbon - selectedCarbon
-    : null
-  const carbonDifferencePercent = carbonDifference != null && idealCarbon != null && idealCarbon > 0
-    ? (carbonDifference / idealCarbon) * 100
-    : null
+
+
   const maxCarbon = Math.max(idealCarbon ?? 0, selectedCarbon ?? 0)
   const width = (value: number | null) => `${maxCarbon && value != null ? (value / maxCarbon) * 100 : 0}%`
   const complexity = pipeline?.task?.complexity
-  const providerKey = details?.provider?.toLowerCase()
-  const registeredProvider = catalog?.providers.find((provider) => provider.name === providerKey)
+
   const modelMetadata = (id: string) => catalog?.models.find((model) => model.model_id === id)
   const displayName = (id: string, provided?: string | null) => modelName(id, provided || modelMetadata(id)?.display_name)
 
